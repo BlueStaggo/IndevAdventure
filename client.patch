@@ -114,7 +114,7 @@
 +}
 --- net/minecraft/client/gui/GuiLevelDialog.java
 +++ net/minecraft/client/gui/GuiLevelDialog.java
-@@ -21,8 +21,7 @@
+@@ -21,10 +21,10 @@
  			}
  
  			var1.setDirectory(var5);
@@ -123,7 +123,19 @@
 +			var1.setFilenameFilter((f, s) -> s.toLowerCase().endsWith(".mclevel"));
  			var1.setLocationRelativeTo(this.screen.mc.mcCanvas);
  			var1.setVisible(true);
++			var1.requestFocusInWindow();
  			if(var1.getFile() != null) {
+ 				var5 = var1.getDirectory();
+ 				if(!var5.endsWith(File.separator)) {
+@@ -32,6 +32,8 @@
+ 				}
+ 
+ 				GuiLoadLevel.a(this.screen, new File(var5 + var1.getFile()));
++			} else {
++				GuiLoadLevel.b(this.screen);
+ 			}
+ 		} finally {
+ 			GuiLoadLevel.unknown(this.screen, false);
 --- net/minecraft/game/level/EntityMap.java
 +++ net/minecraft/game/level/EntityMap.java
 @@ -94,13 +94,16 @@
@@ -4831,24 +4843,23 @@
  	public int difficulty = 2;
  	public boolean thirdPersonView = false;
  
-@@ -71,7 +75,9 @@
+@@ -71,7 +75,8 @@
  		}
  
  		if(var1 == 4) {
 -			this.renderDistance = this.renderDistance + var2 & 3;
 +			this.renderDistance = Math.floorMod(this.renderDistance + var2, 5);
 +			this.mc.renderGlobal.changeWorld(this.mc.theWorld);
-+			this.mc.renderGlobal.loadRenderers();
  		}
  
  		if(var1 == 5) {
-@@ -91,11 +97,26 @@
+@@ -91,11 +96,26 @@
  			this.difficulty = this.difficulty + var2 & 3;
  		}
  
 +		if(var1 == 9) {
 +			this.advancedOpenGL = !this.advancedOpenGL;
-+			this.mc.renderGlobal.loadRenderers();
++			this.mc.renderGlobal.changeWorld(this.mc.theWorld);
 +		}
 +
  		this.saveOptions();
@@ -4870,7 +4881,7 @@
  	}
  
  	private void loadOptions() {
-@@ -147,6 +168,10 @@
+@@ -147,6 +167,10 @@
  						this.difficulty = Integer.parseInt(var5[1]);
  					}
  
@@ -4881,7 +4892,7 @@
  					for(int var3 = 0; var3 < this.keyBindings.length; ++var3) {
  						if(var5[0].equals("key_" + this.keyBindings[var3].keyDescription)) {
  							this.keyBindings[var3].keyCode = Integer.parseInt(var5[1]);
-@@ -172,6 +197,7 @@
+@@ -172,6 +196,7 @@
  			var1.println("anaglyph3d:" + this.anaglyph);
  			var1.println("limitFramerate:" + this.limitFramerate);
  			var1.println("difficulty:" + this.difficulty);
@@ -4889,7 +4900,7 @@
  
  			for(int var2 = 0; var2 < this.keyBindings.length; ++var2) {
  				var1.println("key_" + this.keyBindings[var2].keyDescription + ":" + this.keyBindings[var2].keyCode);
-@@ -182,5 +208,9 @@
+@@ -182,5 +207,9 @@
  			System.out.println("Failed to save options");
  			var3.printStackTrace();
  		}
@@ -8645,7 +8656,7 @@
  
 --- /dev/null
 +++ net/minecraft/client/gui/GuiWorldDialog.java
-@@ -1,0 +1,38 @@
+@@ -1,0 +1,39 @@
 +package net.minecraft.client.gui;
 +
 +import javax.swing.*;
@@ -8673,6 +8684,7 @@
 +			var1.setDialogTitle(this.screen.getDialogTitle());
 +			var1.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
 +			var1.setVisible(true);
++			var1.requestFocusInWindow();
 +			if(var1.showOpenDialog(this.screen.mc.mcCanvas) == JFileChooser.APPROVE_OPTION) {
 +				this.screen.selectFile(var1.getSelectedFile());
 +			} else {
@@ -10236,7 +10248,16 @@
  								var34 = (var9 - (var7 - (float)var13) / 2.0F) * 0.5F * var27.renderManager.worldObj.getLightBrightness(var29, var13, var14);
 --- net/minecraft/client/gui/GuiLoadLevel.java
 +++ net/minecraft/client/gui/GuiLoadLevel.java
-@@ -81,6 +81,13 @@
+@@ -71,8 +71,6 @@
+ 	}
+ 
+ 	public void initGui() {
+-		(new Thread(this)).start();
+-
+ 		for(int var1 = 0; var1 < 5; ++var1) {
+ 			this.controlList.add(new GuiButton(var1, this.width / 2 - 100, this.height / 6 + var1 * 24, "---"));
+ 			((GuiButton)this.controlList.get(var1)).visible = false;
+@@ -81,27 +79,32 @@
  		this.controlList.add(new GuiButton(5, this.width / 2 - 100, this.height / 6 + 120 + 12, "Load file..."));
  		this.controlList.add(new GuiButton(6, this.width / 2 - 100, this.height / 6 + 168, "Cancel"));
  		((GuiButton)this.controlList.get(5)).visible = false;
@@ -10250,6 +10271,67 @@
  	}
  
  	protected final void actionPerformed(GuiButton var1) {
+-		if(!this.frozen) {
+-			if(var1.enabled) {
+-				if(this.loaded && var1.id < 5) {
+-					this.openLevel(var1.id);
+-				}
+-
+-				if(this.finished || this.loaded && var1.id == 5) {
+-					this.frozen = true;
+-					GuiLevelDialog var2 = new GuiLevelDialog(this);
+-					var2.setDaemon(true);
+-					var2.start();
+-				}
+-
+-				if(this.finished || this.loaded && var1.id == 6) {
+-					this.mc.displayGuiScreen(this.parent);
+-				}
+-
+-			}
++		if(var1.enabled) {
++			if(this.loaded && var1.id < 5) {
++				this.openLevel(var1.id);
++			}
++
++			if(this.finished || this.loaded && var1.id == 5) {
++				this.frozen = true;
++				GuiLevelDialog var2 = new GuiLevelDialog(this);
++				var2.setDaemon(true);
++				var2.start();
++			}
++
++			if(this.finished || this.loaded && var1.id == 6) {
++				this.mc.displayGuiScreen(this.parent);
++			}
++
+ 		}
+ 	}
+ 
+@@ -116,11 +119,7 @@
+ 
+ 	public final void drawScreen(int var1, int var2, float var3) {
+ 		this.drawDefaultBackground();
+-		drawCenteredString(this.fontRenderer, this.title, this.width / 2, 20, 16777215);
+-		if(!this.loaded) {
+-			drawCenteredString(this.fontRenderer, this.status, this.width / 2, this.height / 2 - 4, 16777215);
+-		}
+-
++		drawCenteredString(this.fontRenderer, this.title, this.width / 2, this.height / 2 - 4, 16777215);
+ 		super.drawScreen(var1, var2, var3);
+ 	}
+ 
+@@ -137,6 +136,10 @@
+ 
+ 	static File a(GuiLoadLevel var0, File var1) {
+ 		return var0.selectedFile = var1;
++	}
++
++	static void b(GuiLoadLevel var0) {
++		var0.mc.displayGuiScreen(var0.parent);
+ 	}
+ 
+ 	static boolean unknown(GuiLoadLevel var0, boolean var1) {
 --- /dev/null
 +++ net/minecraft/game/level/generator/terrain/StageEroding.java
 @@ -1,0 +1,27 @@
@@ -11817,8 +11899,21 @@
  		this.setLevel(var7);
  	}
  
-@@ -839,6 +880,8 @@
+@@ -827,18 +868,11 @@
+ 			this.theWorld.setLevel();
+ 		}
  
+-		try {
+-			BufferedReader var2 = new BufferedReader(new InputStreamReader((new URL(this.mcApplet.getDocumentBase() + "?n=" + this.session.username + "&i=" + this.session.sessionId)).openStream()));
+-			Integer.parseInt(var2.readLine());
+-			var2.close();
+-			if(this.mcApplet.getDocumentBase().toString().startsWith("http://www.minecraft.net/") || this.mcApplet.getDocumentBase().toString().startsWith("http://minecraft.net/")) {
+-				this.theWorld = var1;
+-			}
+-		} catch (Throwable var3) {
+-		}
+-
++		this.theWorld = var1;
  		if(var1 != null) {
  			var1.load();
 +			this.worldInfo.creative = !var1.survivalWorld;
@@ -11826,7 +11921,7 @@
  			this.playerController.onWorldChange(var1);
  			this.thePlayer = (EntityPlayerSP)var1.findSubclassOf(EntityPlayerSP.class);
  			var1.playerEntity = this.thePlayer;
-@@ -867,13 +910,286 @@
+@@ -867,13 +901,286 @@
  			this.textureWaterFX.textureId = 0;
  			this.textureLavaFX.textureId = 0;
  			int var4 = this.renderEngine.getTexture("/water.png");
