@@ -8656,11 +8656,10 @@
  
 --- /dev/null
 +++ net/minecraft/client/gui/GuiWorldDialog.java
-@@ -1,0 +1,39 @@
+@@ -1,0 +1,38 @@
 +package net.minecraft.client.gui;
 +
 +import javax.swing.*;
-+import java.awt.*;
 +import java.io.File;
 +
 +final class GuiWorldDialog extends Thread {
@@ -13707,42 +13706,35 @@
  		this.posX = var1;
  		this.posY = var2;
  		this.posZ = var3;
-@@ -157,25 +159,28 @@
+@@ -157,27 +159,6 @@
  			this.fire = 600;
  		}
  
-+		float pushFactor = this.worldObj.waterLevel > this.worldObj.groundLevel && !this.worldObj.levelTheme.hasSnow() ? 0.0005F : 0.005F;
-+		if (!this.worldObj.survivalWorld) pushFactor = 0.0F;
-+
- 		float var5;
- 		if(this.posX < -8.0F) {
- 			var5 = -(this.posX + 8.0F);
+-		float var5;
+-		if(this.posX < -8.0F) {
+-			var5 = -(this.posX + 8.0F);
 -			this.motionX += var5 * 0.001F;
-+			this.motionX += var5 * pushFactor;
- 		}
- 
- 		if(this.posZ < -8.0F) {
- 			var5 = -(this.posZ + 8.0F);
+-		}
+-
+-		if(this.posZ < -8.0F) {
+-			var5 = -(this.posZ + 8.0F);
 -			this.motionZ += var5 * 0.001F;
-+			this.motionZ += var5 * pushFactor;
- 		}
- 
- 		if(this.posX > (float)this.worldObj.width + 8.0F) {
+-		}
+-
+-		if(this.posX > (float)this.worldObj.width + 8.0F) {
 -			var5 = this.posX - (float)this.worldObj.width + 8.0F;
 -			this.motionX -= var5 * 0.001F;
-+			var5 = this.posX - (float)this.worldObj.width - 8.0F;
-+			this.motionX -= var5 * pushFactor;
- 		}
- 
- 		if(this.posZ > (float)this.worldObj.length + 8.0F) {
+-		}
+-
+-		if(this.posZ > (float)this.worldObj.length + 8.0F) {
 -			var5 = this.posZ - (float)this.worldObj.length + 8.0F;
 -			this.motionZ -= var5 * 0.001F;
-+			var5 = this.posZ - (float)this.worldObj.length - 8.0F;
-+			this.motionZ -= var5 * pushFactor;
- 		}
- 
+-		}
+-
  		this.isFirstUpdate = false;
-@@ -330,9 +335,12 @@
+ 	}
+ 
+@@ -330,9 +311,12 @@
  			this.distanceWalkedModified = (float)((double)this.distanceWalkedModified + (double)MathHelper.sqrt_float(var20 * var20 + var19 * var19) * 0.6D);
  			if(this.canTriggerWalking) {
  				int var21 = (int)this.posX;
@@ -13756,7 +13748,7 @@
  				if(this.distanceWalkedModified > (float)this.nextStepDistance && var16 > 0) {
  					++this.nextStepDistance;
  					StepSound var15 = Block.blocksList[var16].stepSound;
-@@ -344,6 +352,24 @@
+@@ -344,6 +328,24 @@
  				}
  			}
  
@@ -13781,7 +13773,7 @@
  			this.ySize *= 0.4F;
  			boolean var22 = this.handleWaterMovement();
  			if(this.worldObj.isBoundingBoxBurning(this.boundingBox)) {
-@@ -374,7 +400,7 @@
+@@ -374,7 +376,7 @@
  	}
  
  	public final boolean handleWaterMovement() {
@@ -13790,7 +13782,7 @@
  	}
  
  	public final boolean isInsideOfWater() {
-@@ -387,7 +413,7 @@
+@@ -387,7 +389,7 @@
  	}
  
  	public final boolean handleLavaMovement() {
@@ -13799,7 +13791,7 @@
  	}
  
  	public final void moveFlying(float var1, float var2, float var3) {
-@@ -431,6 +457,13 @@
+@@ -431,6 +433,13 @@
  		float var2 = this.posX - var1.posX;
  		float var3 = this.posY - var1.posY;
  		float var4 = this.posZ - var1.posZ;
