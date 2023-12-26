@@ -4178,7 +4178,7 @@
  
  public final class ItemPickaxe extends ItemTool {
 -	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond};
-+	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond, Block.brick, Block.cog, Block.activator, Block.grate, Block.observer, Block.magneticPlatform};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.oreCopper, Block.blockCopper, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond, Block.brick, Block.cog, Block.activator, Block.grate, Block.observer, Block.magneticPlatform, Block.diode, Block.piston, Block.pistonCopper, Block.pistonGold, Block.logicGate, Block.lampInactive, Block.lampActive};
  	private int harvestLevel;
  
  	public ItemPickaxe(int var1, int var2) {
@@ -4765,7 +4765,7 @@
  		GL11.glDisable(GL11.GL_NORMALIZE);
  		if(this.mc.options.showFPS) {
 -			var4.drawStringWithShadow("Minecraft Indev (" + this.mc.debug + ")", 2, 2, 16777215);
-+			var4.drawStringWithShadow("Indev Adventure 1.0 (" + this.mc.debug + ")", 2, 2, 16777215);
++			var4.drawStringWithShadow(Minecraft.version + " (" + this.mc.debug + ")", 2, 2, 16777215);
  			Minecraft var23 = this.mc;
  			var4.drawStringWithShadow(var23.renderGlobal.getDebugInfoRenders(), 2, 12, 16777215);
  			var23 = this.mc;
@@ -5879,7 +5879,7 @@
  	}
 --- net/minecraft/game/item/recipe/CraftingManager.java
 +++ net/minecraft/game/item/recipe/CraftingManager.java
-@@ -20,24 +20,54 @@
+@@ -20,24 +20,55 @@
  		(new RecipesTools()).addRecipes(this);
  		(new RecipesWeapons()).addRecipes(this);
  		(new RecipesIngots()).addRecipes(this);
@@ -5887,6 +5887,7 @@
 +		(new RecipesMechanics()).addRecipes(this);
 +		this.addRecipe(new ItemStack(Block.blockCopper), "##", "##", '#', Item.ingotCopper);
 +		this.addRecipe(new ItemStack(Item.ingotCopper, 4), "#", '#', Block.blockCopper);
++		this.addRecipe(new ItemStack(Item.bucketEmpty, 1), "# #", " # ", '#', Item.ingotIron);
  		this.addRecipe(new ItemStack(Item.bowlSoup), new Object[]{"Y", "X", "#", Character.valueOf('X'), Block.mushroomBrown, Character.valueOf('Y'), Block.mushroomRed, Character.valueOf('#'), Item.bowlEmpty});
  		this.addRecipe(new ItemStack(Item.bowlSoup), new Object[]{"Y", "X", "#", Character.valueOf('X'), Block.mushroomRed, Character.valueOf('Y'), Block.mushroomBrown, Character.valueOf('#'), Item.bowlEmpty});
 -		new RecipesCrafting();
@@ -7248,7 +7249,7 @@
  
  public final class ItemAxe extends ItemTool {
 -	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate};
-+	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle, Block.woodenGrate};
  
  	public ItemAxe(int var1, int var2) {
  		super(var1, 3, var2, blocksEffectiveAgainst);
@@ -11612,16 +11613,18 @@
  import net.minecraft.game.physics.MovingObjectPosition;
  import org.lwjgl.BufferUtils;
  import org.lwjgl.LWJGLException;
-@@ -57,7 +58,7 @@
+@@ -57,7 +58,9 @@
  import org.lwjgl.opengl.GL11;
  import org.lwjgl.opengl.GLContext;
  
 -public final class Minecraft implements Runnable {
 +public class Minecraft implements Runnable {
++	public static String version = "Indev Adventure 20231226-2";
++
  	public PlayerController playerController = new PlayerControllerSP(this);
  	private boolean fullscreen = false;
  	public int displayWidth;
-@@ -93,6 +94,7 @@
+@@ -93,6 +96,7 @@
  	public SoundManager sndManager;
  	public MouseHelper mouseHelper;
  	public File mcDataDir;
@@ -11629,7 +11632,7 @@
  	private String server;
  	private TextureWaterFX textureWaterFX;
  	private TextureLavaFX textureLavaFX;
-@@ -101,9 +103,11 @@
+@@ -101,9 +105,11 @@
  	public boolean inventoryScreen;
  	private int prevFrameTime;
  	public boolean inGameHasFocus;
@@ -11642,7 +11645,7 @@
  		this.objectMouseOver = null;
  		this.sndManager = new SoundManager();
  		this.server = null;
-@@ -156,6 +160,13 @@
+@@ -156,6 +162,13 @@
  	}
  
  	public final void shutdownMinecraftApplet() {
@@ -11656,7 +11659,7 @@
  		try {
  			if(this.downloadResourcesThread != null) {
  				this.downloadResourcesThread.closeMinecraft();
-@@ -273,6 +284,7 @@
+@@ -273,6 +286,7 @@
  			}
  
  			this.mcDataDir = var27;
@@ -11664,7 +11667,7 @@
  			this.options = new GameSettings(this, this.mcDataDir);
  			this.sndManager.loadSoundSettings(this.options);
  			this.renderEngine = new RenderEngine(this.options);
-@@ -290,7 +302,7 @@
+@@ -290,7 +304,7 @@
  			GL11.glViewport(0, 0, this.displayWidth, this.displayHeight);
  			if(this.server != null && this.session != null) {
  				World var31 = new World();
@@ -11673,7 +11676,7 @@
  				this.setLevel(var31);
  			} else if(this.theWorld == null) {
  				this.displayGuiScreen(new GuiMainMenu());
-@@ -317,7 +329,7 @@
+@@ -317,7 +331,7 @@
  		try {
  			while(this.running) {
  				if(this.theWorld != null) {
@@ -11682,7 +11685,7 @@
  				}
  
  				if(this.mcCanvas == null && Display.isCloseRequested()) {
-@@ -347,9 +359,10 @@
+@@ -347,9 +361,10 @@
  							this.toggleFullscreen();
  						}
  
@@ -11694,7 +11697,7 @@
  					if(this.mcCanvas != null && !this.fullscreen && (this.mcCanvas.getWidth() != this.displayWidth || this.mcCanvas.getHeight() != this.displayHeight)) {
  						this.displayWidth = this.mcCanvas.getWidth();
  						this.displayHeight = this.mcCanvas.getHeight();
-@@ -357,7 +370,7 @@
+@@ -357,7 +372,7 @@
  					}
  
  					if(this.options.limitFramerate) {
@@ -11703,7 +11706,7 @@
  					}
  
  					++var28;
-@@ -378,7 +391,7 @@
+@@ -378,7 +393,7 @@
  
  			return;
  		} catch (MinecraftError var19) {
@@ -11712,7 +11715,7 @@
  			var20.printStackTrace();
  			return;
  		} finally {
-@@ -451,7 +464,6 @@
+@@ -451,7 +466,6 @@
  				if(var1 == 0 && !(this.playerController instanceof PlayerControllerCreative)) {
  					this.leftClickCounter = 10;
  				}
@@ -11720,7 +11723,7 @@
  			} else {
  				ItemStack var9;
  				if(this.objectMouseOver.typeOfHit == 1) {
-@@ -462,7 +474,9 @@
+@@ -462,7 +476,9 @@
  						var9 = var11.getStackInSlot(var11.currentItem);
  						int var17 = var9 != null ? Item.itemsList[var9.itemID].getDamageVsEntity() : 1;
  						if(var17 > 0) {
@@ -11731,7 +11734,7 @@
  							var2 = var12.inventory.getCurrentItem();
  							if(var2 != null && var14 instanceof EntityLiving) {
  								EntityLiving var8 = (EntityLiving)var14;
-@@ -490,7 +504,9 @@
+@@ -490,7 +506,9 @@
  					} else {
  						var9 = this.thePlayer.inventory.getCurrentItem();
  						int var16 = this.theWorld.getBlockId(var10, var3, var13);
@@ -11742,7 +11745,7 @@
  							return;
  						}
  
-@@ -629,19 +645,29 @@
+@@ -629,19 +647,29 @@
  
  								if(Mouse.getEventButton() == 2 && Mouse.getEventButtonState() && this.objectMouseOver != null) {
  									var2 = this.theWorld.getBlockId(this.objectMouseOver.blockX, this.objectMouseOver.blockY, this.objectMouseOver.blockZ);
@@ -11778,7 +11781,7 @@
  								}
  							}
  						} else if(this.currentScreen != null) {
-@@ -719,12 +745,21 @@
+@@ -719,12 +747,21 @@
  										}
  									}
  
@@ -11801,7 +11804,7 @@
  									}
  
  									if(Keyboard.getEventKey() == this.options.keyBindDrop.keyCode) {
-@@ -768,57 +803,63 @@
+@@ -768,57 +805,63 @@
  			}
  		}
  
@@ -11898,7 +11901,7 @@
  		this.setLevel(var7);
  	}
  
-@@ -827,18 +868,11 @@
+@@ -827,18 +870,11 @@
  			this.theWorld.setLevel();
  		}
  
@@ -11920,7 +11923,7 @@
  			this.playerController.onWorldChange(var1);
  			this.thePlayer = (EntityPlayerSP)var1.findSubclassOf(EntityPlayerSP.class);
  			var1.playerEntity = this.thePlayer;
-@@ -867,13 +901,286 @@
+@@ -867,13 +903,286 @@
  			this.textureWaterFX.textureId = 0;
  			this.textureLavaFX.textureId = 0;
  			int var4 = this.renderEngine.getTexture("/water.png");
