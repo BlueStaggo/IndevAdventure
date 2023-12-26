@@ -5313,16 +5313,17 @@
  		this.glRenderListBase = GL11.glGenLists(786432);
  		this.occlusionEnabled = GLContext.getCapabilities().GL_ARB_occlusion_query;
  		if(this.occlusionEnabled) {
-@@ -124,6 +122,8 @@
+@@ -124,6 +122,9 @@
  	}
  
  	public final void loadRenderers() {
++        if (this.worldObj == null) return;
 +		this.occlusionEnabled = this.mc.options.advancedOpenGL;
 +
  		int var1;
  		if(this.worldRenderers != null) {
  			for(var1 = 0; var1 < this.worldRenderers.length; ++var1) {
-@@ -166,6 +166,9 @@
+@@ -166,6 +167,9 @@
  		GL11.glNewList(this.glGenList + 1, GL11.GL_COMPILE);
  		this.oobWaterRenderHeight();
  		GL11.glEndList();
@@ -5332,7 +5333,7 @@
  		this.markBlocksForUpdate(0, 0, 0, this.worldObj.width, this.worldObj.height, this.worldObj.length);
  	}
  
-@@ -175,10 +178,16 @@
+@@ -175,10 +179,16 @@
  		this.countEntitiesTotal = 0;
  		this.countEntitiesRendered = 0;
  		this.countEntitiesHidden = 0;
@@ -5349,7 +5350,7 @@
  					List var8 = var4.entityGrid[(var7 * var4.depth + var6) * var4.width + var5];
  					if(var8.size() != 0) {
  						int var9 = (var5 << 3) + 4;
-@@ -238,6 +247,11 @@
+@@ -238,6 +248,11 @@
  	}
  
  	public final int sortAndRender(EntityPlayer var1, int var2) {
@@ -5361,7 +5362,7 @@
  		if(var2 == 0) {
  			this.renderersLoaded = 0;
  			this.renderersBeingClipped = 0;
-@@ -256,7 +270,7 @@
+@@ -256,7 +271,7 @@
  		}
  
  		int var8;
@@ -5370,7 +5371,7 @@
  			int var10 = 8;
  			this.checkOcclusionQueryResult(0, 8);
  
-@@ -265,7 +279,7 @@
+@@ -265,7 +280,7 @@
  				this.sortedWorldRenderers[var6].isVisible = true;
  			}
  
@@ -5379,7 +5380,7 @@
  
  			do {
  				int var9 = var10;
-@@ -305,7 +319,7 @@
+@@ -305,7 +320,7 @@
  				var8 += this.renderSortedRenderers(var9, var10, var2);
  			} while(var10 < this.sortedWorldRenderers.length);
  		} else {
@@ -5388,7 +5389,7 @@
  		}
  
  		return var8;
-@@ -371,6 +385,10 @@
+@@ -371,6 +386,10 @@
  	}
  
  	public final void renderSky(float var1) {
@@ -5399,7 +5400,7 @@
  		GL11.glDisable(GL11.GL_TEXTURE_2D);
  		Vec3D var2 = this.worldObj.getSkyColor(var1);
  		float var3 = var2.xCoord;
-@@ -389,7 +407,7 @@
+@@ -389,7 +408,7 @@
  		Tessellator var12 = Tessellator.instance;
  		var12.startDrawingQuads();
  		var12.setColorOpaque_F(var3, var4, var9);
@@ -5408,7 +5409,7 @@
  
  		int var10;
  		for(var10 = -2048; var10 < this.worldObj.width + 2048; var10 += 512) {
-@@ -434,11 +452,16 @@
+@@ -434,11 +453,16 @@
  		GL11.glColor4f(var9, var9, var9, var9);
  		GL11.glCallList(this.glSkyList);
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -5428,7 +5429,7 @@
  		GL11.glDepthMask(true);
  		GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.renderEngine.getTexture("/clouds.png"));
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-@@ -456,13 +479,27 @@
+@@ -456,13 +480,27 @@
  			var3 = var3;
  		}
  
@@ -5458,7 +5459,7 @@
  				var12.addVertexWithUV((float)var8, var9, (float)(var10 + 512), (float)var8 * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
  				var12.addVertexWithUV((float)(var8 + 512), var9, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
  				var12.addVertexWithUV((float)(var8 + 512), var9, (float)var10, (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
-@@ -475,14 +512,26 @@
+@@ -475,14 +513,26 @@
  		}
  
  		var12.draw();
@@ -5488,7 +5489,7 @@
  
  		GL11.glColor4f(var1, var1, var1, 1.0F);
  		GL11.glEnable(GL11.GL_TEXTURE_2D);
-@@ -492,23 +541,30 @@
+@@ -492,23 +542,30 @@
  	private void oobGroundRenderHeight() {
  		Tessellator var1 = Tessellator.instance;
  		float var2 = (float)this.worldObj.getGroundLevel();
@@ -5524,7 +5525,7 @@
  					var1.addVertexWithUV((float)(var5 + var3), var2, (float)var6, (float)var3, 0.0F);
  					var1.addVertexWithUV((float)var5, var2, (float)var6, 0.0F, 0.0F);
  				}
-@@ -521,8 +577,16 @@
+@@ -521,8 +578,16 @@
  	public final void oobWaterRenderer() {
  		GL11.glEnable(GL11.GL_TEXTURE_2D);
  		GL11.glEnable(GL11.GL_BLEND);
@@ -5543,7 +5544,7 @@
  		GL11.glColor4f(var1, var1, var1, 1.0F);
  		GL11.glCallList(this.glGenList + 1);
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-@@ -534,31 +598,33 @@
+@@ -534,31 +599,33 @@
  		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
  		Tessellator var2 = Tessellator.instance;
  		int var3 = 128;
@@ -5589,7 +5590,7 @@
  				}
  			}
  		}
-@@ -567,6 +633,75 @@
+@@ -567,6 +634,75 @@
  		GL11.glDisable(GL11.GL_BLEND);
  	}
  
@@ -5665,7 +5666,7 @@
  	public final void updateRenderers(EntityPlayer var1) {
  		Collections.sort(this.worldRenderersToUpdate, new RenderSorter(var1));
  		int var2 = this.worldRenderersToUpdate.size() - 1;
-@@ -574,13 +709,16 @@
+@@ -574,13 +710,16 @@
  
  		for(int var4 = 0; var4 < var3; ++var4) {
  			WorldRenderer var5 = (WorldRenderer)this.worldRenderersToUpdate.get(var2 - var4);
@@ -5686,7 +5687,7 @@
  		}
  
  	}
-@@ -618,6 +756,8 @@
+@@ -618,6 +757,8 @@
  	}
  
  	public final void drawSelectionBox(MovingObjectPosition var1, int var2) {
@@ -5695,7 +5696,7 @@
  		GL11.glEnable(GL11.GL_BLEND);
  		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
  		GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.4F);
-@@ -714,7 +854,7 @@
+@@ -714,7 +855,7 @@
  
  	public final void clipRenderersByFrustrum(ICamera var1) {
  		for(int var2 = 0; var2 < this.worldRenderers.length; ++var2) {
@@ -5704,7 +5705,7 @@
  		}
  
  	}
-@@ -774,5 +914,20 @@
+@@ -774,5 +915,20 @@
  		GL11.glNewList(this.glGenList + 1, GL11.GL_COMPILE);
  		this.oobWaterRenderHeight();
  		GL11.glEndList();
@@ -7133,6 +7134,17 @@
  
  			GL11.glScalef(var2, var2, var2);
  
+--- net/minecraft/game/item/ItemAxe.java
++++ net/minecraft/game/item/ItemAxe.java
+@@ -3,7 +3,7 @@
+ import net.minecraft.game.level.block.Block;
+ 
+ public final class ItemAxe extends ItemTool {
+-	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle, Block.woodenGrate};
+ 
+ 	public ItemAxe(int var1, int var2) {
+ 		super(var1, 3, var2, blocksEffectiveAgainst);
 --- net/minecraft/client/gui/GuiButton.java
 +++ net/minecraft/client/gui/GuiButton.java
 @@ -4,50 +4,69 @@
@@ -7242,17 +7254,6 @@
 +	protected void mouseDragged(Minecraft var1, int var2, int var3) {
  	}
  }
---- net/minecraft/game/item/ItemAxe.java
-+++ net/minecraft/game/item/ItemAxe.java
-@@ -3,7 +3,7 @@
- import net.minecraft.game.level.block.Block;
- 
- public final class ItemAxe extends ItemTool {
--	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate};
-+	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle, Block.woodenGrate};
- 
- 	public ItemAxe(int var1, int var2) {
- 		super(var1, 3, var2, blocksEffectiveAgainst);
 --- net/minecraft/game/level/block/BlockTNT.java
 +++ net/minecraft/game/level/block/BlockTNT.java
 @@ -1,6 +1,7 @@
@@ -8610,15 +8611,6 @@
  	}
  
  	private void downloadResource(URL var1, File var2) throws IOException {
---- net/minecraft/client/Timer.java
-+++ net/minecraft/client/Timer.java
-@@ -51,5 +51,6 @@
- 		}
- 
- 		this.renderPartialTicks = this.elapsedPartialTicks;
-+		this.timerSpeed = 1.0F;
- 	}
- }
 --- net/minecraft/game/level/block/BlockWorkbench.java
 +++ net/minecraft/game/level/block/BlockWorkbench.java
 @@ -5,7 +5,7 @@
@@ -8638,6 +8630,15 @@
  		var5.displayWorkbenchGUI();
  		return true;
  	}
+--- net/minecraft/client/Timer.java
++++ net/minecraft/client/Timer.java
+@@ -51,5 +51,6 @@
+ 		}
+ 
+ 		this.renderPartialTicks = this.elapsedPartialTicks;
++		this.timerSpeed = 1.0F;
+ 	}
+ }
 --- net/minecraft/game/level/block/BlockTorch.java
 +++ net/minecraft/game/level/block/BlockTorch.java
 @@ -8,12 +8,12 @@
@@ -8759,6 +8760,17 @@
  
  	public final void addRecipes(CraftingManager var1) {
  		for(int var2 = 0; var2 < this.recipeItems[0].length; ++var2) {
+--- net/minecraft/game/level/block/BlockDirt.java
++++ net/minecraft/game/level/block/BlockDirt.java
+@@ -3,7 +3,7 @@
+ import net.minecraft.game.level.material.Material;
+ 
+ public final class BlockDirt extends Block {
+-	protected BlockDirt(int var1, int var2) {
++	public BlockDirt(int var1, int var2) {
+ 		super(3, 2, Material.ground);
+ 	}
+ }
 --- net/minecraft/client/player/EntityPlayerSP.java
 +++ net/minecraft/client/player/EntityPlayerSP.java
 @@ -36,7 +36,18 @@
@@ -8822,17 +8834,6 @@
 +		x = 1.0F - x;
 +		z = 1.0F - z;
 +		return Math.max(x, z);
- 	}
- }
---- net/minecraft/game/level/block/BlockDirt.java
-+++ net/minecraft/game/level/block/BlockDirt.java
-@@ -3,7 +3,7 @@
- import net.minecraft.game.level.material.Material;
- 
- public final class BlockDirt extends Block {
--	protected BlockDirt(int var1, int var2) {
-+	public BlockDirt(int var1, int var2) {
- 		super(3, 2, Material.ground);
  	}
  }
 --- com/mojang/nbt/NBTTagCompound.java
@@ -9004,32 +9005,6 @@
 +	}
 +}
 --- /dev/null
-+++ net/minecraft/game/item/recipe/RecipesMechanics.java
-@@ -1,0 +1,23 @@
-+package net.minecraft.game.item.recipe;
-+
-+import net.minecraft.game.item.ItemStack;
-+import static net.minecraft.game.level.block.Block.*;
-+import static net.minecraft.game.item.Item.*;
-+
-+public class RecipesMechanics {
-+	public final void addRecipes(CraftingManager cm) {
-+		cm.addRecipe(new ItemStack(wrench), "C C", "C|C", " | ", 'C', ingotIron, '|', ingotCopper);
-+		cm.addRecipe(new ItemStack(cog, 16), " X ", "XXX", " X ", 'X', ingotIron);
-+		cm.addRecipe(new ItemStack(activator), "###", "#X#", "###", '#', cobblestone, 'X', ingotCopper);
-+		cm.addRecipe(new ItemStack(grate, 4), "X X", " X ", "X X", 'X', ingotIron);
-+		cm.addRecipe(new ItemStack(observer), "## ", "XXO", "## ", '#', cobblestone, 'X', ingotCopper, 'O', glass);
-+		cm.addRecipe(new ItemStack(lampInactive, 4), " O ", "OXO", " O ", 'O', glass, 'X', ingotCopper);
-+		cm.addRecipe(new ItemStack(piston), "###", "|C|", "|C|", '#', wood, '|', cobblestone, 'C', ingotCopper);
-+		cm.addRecipe(new ItemStack(pistonCopper), "###", "|C|", "|C|", '#', ingotCopper, '|', cobblestone, 'C', ingotCopper);
-+		cm.addRecipe(new ItemStack(pistonGold), "###", "|C|", "|C|", '#', ingotGold, '|', cobblestone, 'C', ingotCopper);
-+		cm.addRecipe(new ItemStack(diode), " # ", "XOX", " # ", '#', cobblestone, 'X', ingotCopper, 'O', ingotGold);
-+		cm.addRecipe(new ItemStack(magneticPlatform, 4), "###", "XXX", "###", '#', cobblestone, 'X', diamond);
-+		cm.addRecipe(new ItemStack(woodenGrate, 4), "X X", " X ", "X X", 'X', stick);
-+		cm.addRecipe(new ItemStack(logicGate), "#X#", "XOX", "#X#", '#', cobblestone, 'X', ingotCopper, 'O', ingotGold);
-+	}
-+}
---- /dev/null
 +++ net/minecraft/game/level/WorldInfo.java
 @@ -1,0 +1,45 @@
 +package net.minecraft.game.level;
@@ -9075,6 +9050,32 @@
 +		nbt.setInteger("WorldTime", this.worldTime);
 +		nbt.setInteger("PlayerScore", this.playerScore);
 +		nbt.setBoolean("Creative", this.creative);
++	}
++}
+--- /dev/null
++++ net/minecraft/game/item/recipe/RecipesMechanics.java
+@@ -1,0 +1,23 @@
++package net.minecraft.game.item.recipe;
++
++import net.minecraft.game.item.ItemStack;
++import static net.minecraft.game.level.block.Block.*;
++import static net.minecraft.game.item.Item.*;
++
++public class RecipesMechanics {
++	public final void addRecipes(CraftingManager cm) {
++		cm.addRecipe(new ItemStack(wrench), "C C", "C|C", " | ", 'C', ingotIron, '|', ingotCopper);
++		cm.addRecipe(new ItemStack(cog, 16), " X ", "XXX", " X ", 'X', ingotIron);
++		cm.addRecipe(new ItemStack(activator), "###", "#X#", "###", '#', cobblestone, 'X', ingotCopper);
++		cm.addRecipe(new ItemStack(grate, 4), "X X", " X ", "X X", 'X', ingotIron);
++		cm.addRecipe(new ItemStack(observer), "## ", "XXO", "## ", '#', cobblestone, 'X', ingotCopper, 'O', glass);
++		cm.addRecipe(new ItemStack(lampInactive, 4), " O ", "OXO", " O ", 'O', glass, 'X', ingotCopper);
++		cm.addRecipe(new ItemStack(piston), "###", "|C|", "|C|", '#', planks, '|', cobblestone, 'C', ingotCopper);
++		cm.addRecipe(new ItemStack(pistonCopper), "###", "|C|", "|C|", '#', ingotCopper, '|', cobblestone, 'C', ingotCopper);
++		cm.addRecipe(new ItemStack(pistonGold), "###", "|C|", "|C|", '#', ingotGold, '|', cobblestone, 'C', ingotCopper);
++		cm.addRecipe(new ItemStack(diode), " # ", "XOX", " # ", '#', cobblestone, 'X', ingotCopper, 'O', ingotGold);
++		cm.addRecipe(new ItemStack(magneticPlatform, 4), "###", "XXX", "###", '#', cobblestone, 'X', diamond);
++		cm.addRecipe(new ItemStack(woodenGrate, 4), "X X", " X ", "X X", 'X', stick);
++		cm.addRecipe(new ItemStack(logicGate), "#X#", "XOX", "#X#", '#', cobblestone, 'X', ingotCopper, 'O', ingotGold);
 +	}
 +}
 --- net/minecraft/game/level/LevelLoader.java
@@ -9517,53 +9518,6 @@
  		super(59, 88);
  		this.blockIndexInTexture = 88;
  		this.setTickOnLoad(true);
---- net/minecraft/client/render/RenderBlocks.java
-+++ net/minecraft/client/render/RenderBlocks.java
-@@ -2,6 +2,7 @@
- 
- import net.minecraft.game.level.World;
- import net.minecraft.game.level.block.Block;
-+import net.minecraft.game.level.block.BlockGears;
- import net.minecraft.game.level.material.Material;
- import org.lwjgl.opengl.GL11;
- 
-@@ -31,6 +32,7 @@
- 
- 	public final boolean renderBlockByRenderType(Block var1, int var2, int var3, int var4) {
- 		int var5 = var1.getRenderType();
-+		var1.setBoundsForRender(this.blockAccess, var2, var3, var4);
- 		Tessellator var6;
- 		float var10;
- 		boolean var26;
-@@ -423,6 +425,20 @@
- 							var6.addVertexWithUV((float)(var3 + 1) - 0.05F, (float)var4 - 2.0F / 16.0F, (float)var5 - 2.0F / 16.0F, var10, var20);
- 						}
- 
-+						if(this.blockAccess.isBlockNormalCube(var3, var4 - 1, var5) && BlockGears.showFloorGear(this.blockAccess, var3, var4, var5, -1)) {
-+							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)var4 + 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var11, var22);
-+							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 + 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var11, var20);
-+							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 + 0.05F, (float)var5 - 2.0F / 16.0F, var10, var20);
-+							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)var4 + 0.05F, (float)var5 - 2.0F / 16.0F, var10, var22);
-+						}
-+
-+						if(this.blockAccess.isBlockNormalCube(var3, var4 + 1, var5) && BlockGears.showFloorGear(this.blockAccess, var3, var4, var5, 1)) {
-+							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var10, var22);
-+							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var10, var20);
-+							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)var5 - 2.0F / 16.0F, var11, var20);
-+							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)var5 - 2.0F / 16.0F, var11, var22);
-+						}
-+
- 						if(this.blockAccess.isBlockNormalCube(var3, var4, var5 - 1)) {
- 							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 - 2.0F / 16.0F, (float)var5 + 0.05F, var13, var15);
- 							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) + 2.0F / 16.0F, (float)var5 + 0.05F, var13, var14);
-@@ -758,6 +774,7 @@
- 	public final void renderBlockOnInventory(Block var1) {
- 		Tessellator var2 = Tessellator.instance;
- 		int var3 = var1.getRenderType();
-+		var1.resetBlockBounds();
- 		if(var3 == 0) {
- 			GL11.glTranslatef(-0.5F, -0.5F, -0.5F);
- 			var2.startDrawingQuads();
 --- net/minecraft/game/item/Item.java
 +++ net/minecraft/game/item/Item.java
 @@ -7,6 +7,7 @@
@@ -10005,6 +9959,53 @@
  		ItemPainting var26 = new ItemPainting(65);
  		var1 = 26;
  		ItemPainting var14 = var26;
+--- net/minecraft/client/render/RenderBlocks.java
++++ net/minecraft/client/render/RenderBlocks.java
+@@ -2,6 +2,7 @@
+ 
+ import net.minecraft.game.level.World;
+ import net.minecraft.game.level.block.Block;
++import net.minecraft.game.level.block.BlockGears;
+ import net.minecraft.game.level.material.Material;
+ import org.lwjgl.opengl.GL11;
+ 
+@@ -31,6 +32,7 @@
+ 
+ 	public final boolean renderBlockByRenderType(Block var1, int var2, int var3, int var4) {
+ 		int var5 = var1.getRenderType();
++		var1.setBoundsForRender(this.blockAccess, var2, var3, var4);
+ 		Tessellator var6;
+ 		float var10;
+ 		boolean var26;
+@@ -423,6 +425,20 @@
+ 							var6.addVertexWithUV((float)(var3 + 1) - 0.05F, (float)var4 - 2.0F / 16.0F, (float)var5 - 2.0F / 16.0F, var10, var20);
+ 						}
+ 
++						if(this.blockAccess.isBlockNormalCube(var3, var4 - 1, var5) && BlockGears.showFloorGear(this.blockAccess, var3, var4, var5, -1)) {
++							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)var4 + 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var11, var22);
++							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 + 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var11, var20);
++							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 + 0.05F, (float)var5 - 2.0F / 16.0F, var10, var20);
++							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)var4 + 0.05F, (float)var5 - 2.0F / 16.0F, var10, var22);
++						}
++
++						if(this.blockAccess.isBlockNormalCube(var3, var4 + 1, var5) && BlockGears.showFloorGear(this.blockAccess, var3, var4, var5, 1)) {
++							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var10, var22);
++							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)(var5 + 1) + 2.0F / 16.0F, var10, var20);
++							var6.addVertexWithUV((float)var3 - 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)var5 - 2.0F / 16.0F, var11, var20);
++							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) - 0.05F, (float)var5 - 2.0F / 16.0F, var11, var22);
++						}
++
+ 						if(this.blockAccess.isBlockNormalCube(var3, var4, var5 - 1)) {
+ 							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)var4 - 2.0F / 16.0F, (float)var5 + 0.05F, var13, var15);
+ 							var6.addVertexWithUV((float)(var3 + 1) + 2.0F / 16.0F, (float)(var4 + 1) + 2.0F / 16.0F, (float)var5 + 0.05F, var13, var14);
+@@ -758,6 +774,7 @@
+ 	public final void renderBlockOnInventory(Block var1) {
+ 		Tessellator var2 = Tessellator.instance;
+ 		int var3 = var1.getRenderType();
++		var1.resetBlockBounds();
+ 		if(var3 == 0) {
+ 			GL11.glTranslatef(-0.5F, -0.5F, -0.5F);
+ 			var2.startDrawingQuads();
 --- /dev/null
 +++ net/minecraft/game/level/block/BlockPiston.java
 @@ -1,0 +1,116 @@
@@ -11619,7 +11620,7 @@
  
 -public final class Minecraft implements Runnable {
 +public class Minecraft implements Runnable {
-+	public static String version = "Indev Adventure 20231226-2";
++	public static String version = "Indev Adventure 20231226-3";
 +
  	public PlayerController playerController = new PlayerControllerSP(this);
  	private boolean fullscreen = false;
@@ -12557,6 +12558,25 @@
  	}
  }
 --- /dev/null
++++ net/minecraft/game/level/generator/terrain/NoiseModifierAccess.java
+@@ -1,0 +1,16 @@
++package net.minecraft.game.level.generator.terrain;
++
++import net.minecraft.game.level.generator.noise.NoiseGenerator;
++
++@FunctionalInterface
++public interface NoiseModifierAccess {
++	double getValue(double x, double z, NoiseGenerator noise);
++
++	static NoiseModifierAccess constant(double value) {
++		return (x, z, noise) -> value;
++	}
++
++	static NoiseModifierAccess variation(double base, double range, double scale) {
++		return (x, z, noise) -> base + noise.generateNoiseNormalized(x * scale, z * scale) * range;
++	}
++}
+--- /dev/null
 +++ net/minecraft/game/level/block/BlockActivator.java
 @@ -1,0 +1,24 @@
 +package net.minecraft.game.level.block;
@@ -12583,216 +12603,6 @@
 +		return true;
 +	}
 +}
---- /dev/null
-+++ net/minecraft/game/level/generator/terrain/NoiseModifierAccess.java
-@@ -1,0 +1,16 @@
-+package net.minecraft.game.level.generator.terrain;
-+
-+import net.minecraft.game.level.generator.noise.NoiseGenerator;
-+
-+@FunctionalInterface
-+public interface NoiseModifierAccess {
-+	double getValue(double x, double z, NoiseGenerator noise);
-+
-+	static NoiseModifierAccess constant(double value) {
-+		return (x, z, noise) -> value;
-+	}
-+
-+	static NoiseModifierAccess variation(double base, double range, double scale) {
-+		return (x, z, noise) -> base + noise.generateNoiseNormalized(x * scale, z * scale) * range;
-+	}
-+}
---- net/minecraft/game/level/block/Block.java
-+++ net/minecraft/game/level/block/Block.java
-@@ -1,6 +1,8 @@
- package net.minecraft.game.level.block;
- 
- import java.util.Random;
-+
-+import net.minecraft.game.entity.Entity;
- import net.minecraft.game.entity.misc.EntityItem;
- import net.minecraft.game.entity.player.EntityPlayer;
- import net.minecraft.game.entity.player.InventoryPlayer;
-@@ -30,6 +32,7 @@
- 	private static boolean[] canBlockGrass = new boolean[256];
- 	public static final boolean[] isBlockFluid = new boolean[256];
- 	public static final int[] lightValue = new int[256];
-+	public static final boolean[] conductive = new boolean[256];
- 	public static final Block stone;
- 	public static final BlockGrass grass;
- 	public static final Block dirt;
-@@ -92,6 +95,27 @@
- 	public static final Block tilledField;
- 	public static final Block stoneOvenIdle;
- 	public static final Block stoneOvenActive;
-+	public static final Block snow = (new BlockSnow(63, 81)).setHardness(0.1F).setStepSound(soundClothFootstep);
-+	public static final Block ice = (new BlockIce(64, 96)).setHardness(0.5F).setLightOpacity(3).setStepSound(soundGlassFootstep);
-+	public static final Block blockSnow = (new BlockSnowBlock(65, 81)).setHardness(0.2F).setStepSound(soundClothFootstep);
-+	public static final Block cactus = (new BlockCactus(66, 110)).setHardness(0.4F).setStepSound(soundClothFootstep);
-+	public static final BlockFlower plantBlue = (BlockFlower)(new BlockFlower(67, 108)).setHardness(0.0F).setStepSound(soundGrassFootstep);
-+	public static final Block woodStairDouble = (new BlockStep(68, 4, Material.wood, true)).setHardness(2.0F).setResistance(5.0F).setStepSound(soundWoodFootstep);
-+	public static final Block woodStairSingle = (new BlockStep(69, 4, Material.wood, false)).setHardness(2.0F).setResistance(5.0F).setStepSound(soundWoodFootstep);
-+	public static final Block activator = (new BlockActivator(70, 53, Material.iron)).setHardness(3.0F);
-+	public static final Block grate = (new BlockGrate(71, 82, Material.iron)).setHardness(1.5F).setStepSound(soundMetalFootstep);
-+	public static final Block observer = (new BlockObserver(72)).setHardness(0.3F).setStepSound(soundMetalFootstep);
-+	public static final Block oreCopper = (new BlockOre(73, 51)).setHardness(3.0F).setResistance(5.0F).setStepSound(soundStoneFootstep);
-+	public static final Block blockCopper = (new BlockOreBlock(74, 101)).setHardness(3.0F).setResistance(10.0F).setStepSound(soundMetalFootstep);
-+	public static final Block lampInactive = (new BlockLamp(75, 99, 76)).setHardness(0.3F).setStepSound(soundGlassFootstep);
-+	public static final Block lampActive = (new BlockLamp(76, 100, 75)).setHardness(0.3F).setStepSound(soundGlassFootstep).setLightValue(1.0F);
-+	public static final Block piston = (new BlockPiston(77, 103, 0)).setHardness(0.3F).setStepSound(soundMetalFootstep);
-+	public static final Block pistonCopper = (new BlockPiston(78, 105, 1)).setHardness(0.3F).setStepSound(soundMetalFootstep);
-+	public static final Block pistonGold = (new BlockPiston(79, 107, 2)).setHardness(0.3F).setStepSound(soundMetalFootstep);
-+	public static final Block diode = (new BlockDiode(80)).setHardness(0.3F).setStepSound(soundMetalFootstep);
-+	public static final Block magneticPlatform = (new BlockMagnetPlatform(81, 120)).setHardness(2.0F).setResistance(10.0F).setStepSound(soundStoneFootstep);
-+	public static final Block woodenGrate = (new BlockGrate(82, 127, Material.wood)).setHardness(1.5F).setStepSound(soundWoodFootstep);
-+	public static final Block logicGate = (new BlockLogicGate(83)).setHardness(0.3F).setStepSound(soundMetalFootstep);
- 	public int blockIndexInTexture;
- 	public final int blockID;
- 	private float hardness;
-@@ -106,7 +130,7 @@
- 	public float blockParticleGravity;
- 	public final Material material;
- 
--	protected Block(int var1, Material var2) {
-+	public Block(int var1, Material var2) {
- 		this.stepSound = soundPowderFootstep;
- 		this.blockParticleGravity = 1.0F;
- 		if(blocksList[var1] != null) {
-@@ -120,10 +144,11 @@
- 			lightOpacity[var1] = this.isOpaqueCube() ? 255 : 0;
- 			canBlockGrass[var1] = this.renderAsNormalBlock();
- 			isBlockFluid[var1] = false;
-+			conductive[var1] = this.isConductive();
- 		}
- 	}
- 
--	protected Block(int var1, int var2, Material var3) {
-+	public Block(int var1, int var2, Material var3) {
- 		this(var1, var3);
- 		this.blockIndexInTexture = var2;
- 	}
-@@ -143,6 +168,11 @@
- 		return this;
- 	}
- 
-+	protected final Block setStepSound(StepSound var1) {
-+		this.stepSound = var1;
-+		return this;
-+	}
-+
- 	public boolean renderAsNormalBlock() {
- 		return true;
- 	}
-@@ -193,11 +223,11 @@
- 		return this.blockIndexInTexture;
- 	}
- 
--	public final AxisAlignedBB getSelectedBoundingBoxFromPool(int var1, int var2, int var3) {
-+	public AxisAlignedBB getSelectedBoundingBoxFromPool(int var1, int var2, int var3) {
- 		return new AxisAlignedBB((float)var1 + this.minX, (float)var2 + this.minY, (float)var3 + this.minZ, (float)var1 + this.maxX, (float)var2 + this.maxY, (float)var3 + this.maxZ);
- 	}
- 
--	public AxisAlignedBB getCollisionBoundingBoxFromPool(int var1, int var2, int var3) {
-+	public AxisAlignedBB getCollisionBoundingBoxFromPool(World var0, int var1, int var2, int var3) {
- 		return new AxisAlignedBB((float)var1 + this.minX, (float)var2 + this.minY, (float)var3 + this.minZ, (float)var1 + this.maxX, (float)var2 + this.maxY, (float)var3 + this.maxZ);
- 	}
- 
-@@ -265,11 +295,11 @@
- 		}
- 	}
- 
--	public final void dropBlockAsItem(World var1, int var2, int var3, int var4, int var5) {
-+	public void dropBlockAsItem(World var1, int var2, int var3, int var4, int var5) {
- 		this.dropBlockAsItemWithChance(var1, var2, var3, var4, var5, 1.0F);
- 	}
- 
--	public final void dropBlockAsItemWithChance(World var1, int var2, int var3, int var4, int var5, float var6) {
-+	public void dropBlockAsItemWithChance(World var1, int var2, int var3, int var4, int var5, float var6) {
- 		int var7 = this.quantityDropped(var1.random);
- 
- 		for(int var8 = 0; var8 < var7; ++var8) {
-@@ -415,6 +445,37 @@
- 	public void onBlockPlaced(World var1, int var2, int var3, int var4, int var5) {
- 	}
- 
-+	public void onEntityCollidedWithBlock(World var1, int var2, int var3, int var4, Entity var5) {
-+	}
-+
-+	public boolean canBlockStay(World var1, int var2, int var3, int var4) {
-+		return true;
-+	}
-+
-+	public void setBoundsForRender(World var1, int var2, int var3, int var4) {
-+	}
-+
-+	public void velocityToAddToEntity(World var1, int var2, int var3, int var4, Vec3D var5) {
-+	}
-+
-+	public void resetBlockBounds() {
-+	}
-+
-+	public boolean isConductive() {
-+		return false;
-+	}
-+
-+	public boolean conductWithBlock(Block block) {
-+		return true;
-+	}
-+
-+	public boolean canReceivePower(World var1, int var2, int var3, int var4, int var5) {
-+		return true;
-+	}
-+
-+	public void onPowerReceived(World world, int x, int y, int z, int dir) {
-+	}
-+
- 	static {
- 		Block var10000 = (new BlockStone(1, 1)).setHardness(1.5F).setResistance(10.0F);
- 		StepSound var1 = soundStoneFootstep;
-@@ -610,12 +671,12 @@
- 		var0 = var10000;
- 		var0.stepSound = var1;
- 		blockSteel = var0;
--		var10000 = (new BlockStep(43, true)).setHardness(2.0F).setResistance(10.0F);
-+		var10000 = (new BlockStep(43, 6, Material.rock, true)).setHardness(2.0F).setResistance(10.0F);
- 		var1 = soundStoneFootstep;
- 		var0 = var10000;
- 		var0.stepSound = var1;
- 		stairDouble = var0;
--		var10000 = (new BlockStep(44, false)).setHardness(2.0F).setResistance(10.0F);
-+		var10000 = (new BlockStep(44, 6, Material.rock, false)).setHardness(2.0F).setResistance(10.0F);
- 		var1 = soundStoneFootstep;
- 		var0 = var10000;
- 		var0.stepSound = var1;
-@@ -640,7 +701,7 @@
- 		var0 = var10000;
- 		var0.stepSound = var1;
- 		cobblestoneMossy = var0;
--		var10000 = (new BlockStone(49, 37)).setHardness(10.0F).setResistance(10.0F);
-+		var10000 = (new Block(49, 37, Material.rock)).setHardness(10.0F).setResistance(2000.0F);
- 		var1 = soundStoneFootstep;
- 		var0 = var10000;
- 		var0.stepSound = var1;
---- net/minecraft/game/level/block/BlockChest.java
-+++ net/minecraft/game/level/block/BlockChest.java
-@@ -14,7 +14,7 @@
- public final class BlockChest extends BlockContainer {
- 	private Random random = new Random();
- 
--	protected BlockChest(int var1) {
-+	public BlockChest(int var1) {
- 		super(54, Material.wood);
- 		this.blockIndexInTexture = 26;
- 	}
-@@ -165,6 +165,8 @@
- 	}
- 
- 	public final boolean blockActivated(World var1, int var2, int var3, int var4, EntityPlayer var5) {
-+		if (!var1.survivalWorld) return false;
-+
- 		Object var6 = (TileEntityChest)var1.getBlockTileEntity(var2, var3, var4);
- 		if(var1.isBlockNormalCube(var2, var3 + 1, var4)) {
- 			return true;
 --- net/minecraft/game/level/block/BlockFlowing.java
 +++ net/minecraft/game/level/block/BlockFlowing.java
 @@ -1,241 +1,255 @@
@@ -13267,6 +13077,197 @@
 +
  	}
  }
+--- net/minecraft/game/level/block/BlockChest.java
++++ net/minecraft/game/level/block/BlockChest.java
+@@ -14,7 +14,7 @@
+ public final class BlockChest extends BlockContainer {
+ 	private Random random = new Random();
+ 
+-	protected BlockChest(int var1) {
++	public BlockChest(int var1) {
+ 		super(54, Material.wood);
+ 		this.blockIndexInTexture = 26;
+ 	}
+@@ -165,6 +165,8 @@
+ 	}
+ 
+ 	public final boolean blockActivated(World var1, int var2, int var3, int var4, EntityPlayer var5) {
++		if (!var1.survivalWorld) return false;
++
+ 		Object var6 = (TileEntityChest)var1.getBlockTileEntity(var2, var3, var4);
+ 		if(var1.isBlockNormalCube(var2, var3 + 1, var4)) {
+ 			return true;
+--- net/minecraft/game/level/block/Block.java
++++ net/minecraft/game/level/block/Block.java
+@@ -1,6 +1,8 @@
+ package net.minecraft.game.level.block;
+ 
+ import java.util.Random;
++
++import net.minecraft.game.entity.Entity;
+ import net.minecraft.game.entity.misc.EntityItem;
+ import net.minecraft.game.entity.player.EntityPlayer;
+ import net.minecraft.game.entity.player.InventoryPlayer;
+@@ -30,6 +32,7 @@
+ 	private static boolean[] canBlockGrass = new boolean[256];
+ 	public static final boolean[] isBlockFluid = new boolean[256];
+ 	public static final int[] lightValue = new int[256];
++	public static final boolean[] conductive = new boolean[256];
+ 	public static final Block stone;
+ 	public static final BlockGrass grass;
+ 	public static final Block dirt;
+@@ -92,6 +95,27 @@
+ 	public static final Block tilledField;
+ 	public static final Block stoneOvenIdle;
+ 	public static final Block stoneOvenActive;
++	public static final Block snow = (new BlockSnow(63, 81)).setHardness(0.1F).setStepSound(soundClothFootstep);
++	public static final Block ice = (new BlockIce(64, 96)).setHardness(0.5F).setLightOpacity(3).setStepSound(soundGlassFootstep);
++	public static final Block blockSnow = (new BlockSnowBlock(65, 81)).setHardness(0.2F).setStepSound(soundClothFootstep);
++	public static final Block cactus = (new BlockCactus(66, 110)).setHardness(0.4F).setStepSound(soundClothFootstep);
++	public static final BlockFlower plantBlue = (BlockFlower)(new BlockFlower(67, 108)).setHardness(0.0F).setStepSound(soundGrassFootstep);
++	public static final Block woodStairDouble = (new BlockStep(68, 4, Material.wood, true)).setHardness(2.0F).setResistance(5.0F).setStepSound(soundWoodFootstep);
++	public static final Block woodStairSingle = (new BlockStep(69, 4, Material.wood, false)).setHardness(2.0F).setResistance(5.0F).setStepSound(soundWoodFootstep);
++	public static final Block activator = (new BlockActivator(70, 53, Material.iron)).setHardness(3.0F);
++	public static final Block grate = (new BlockGrate(71, 82, Material.iron)).setHardness(1.5F).setStepSound(soundMetalFootstep);
++	public static final Block observer = (new BlockObserver(72)).setHardness(0.3F).setStepSound(soundMetalFootstep);
++	public static final Block oreCopper = (new BlockOre(73, 51)).setHardness(3.0F).setResistance(5.0F).setStepSound(soundStoneFootstep);
++	public static final Block blockCopper = (new BlockOreBlock(74, 101)).setHardness(3.0F).setResistance(10.0F).setStepSound(soundMetalFootstep);
++	public static final Block lampInactive = (new BlockLamp(75, 99, 76)).setHardness(0.3F).setStepSound(soundGlassFootstep);
++	public static final Block lampActive = (new BlockLamp(76, 100, 75)).setHardness(0.3F).setStepSound(soundGlassFootstep).setLightValue(1.0F);
++	public static final Block piston = (new BlockPiston(77, 103, 0)).setHardness(0.3F).setStepSound(soundMetalFootstep);
++	public static final Block pistonCopper = (new BlockPiston(78, 105, 1)).setHardness(0.3F).setStepSound(soundMetalFootstep);
++	public static final Block pistonGold = (new BlockPiston(79, 107, 2)).setHardness(0.3F).setStepSound(soundMetalFootstep);
++	public static final Block diode = (new BlockDiode(80)).setHardness(0.3F).setStepSound(soundMetalFootstep);
++	public static final Block magneticPlatform = (new BlockMagnetPlatform(81, 120)).setHardness(2.0F).setResistance(10.0F).setStepSound(soundStoneFootstep);
++	public static final Block woodenGrate = (new BlockGrate(82, 127, Material.wood)).setHardness(1.5F).setStepSound(soundWoodFootstep);
++	public static final Block logicGate = (new BlockLogicGate(83)).setHardness(0.3F).setStepSound(soundMetalFootstep);
+ 	public int blockIndexInTexture;
+ 	public final int blockID;
+ 	private float hardness;
+@@ -106,7 +130,7 @@
+ 	public float blockParticleGravity;
+ 	public final Material material;
+ 
+-	protected Block(int var1, Material var2) {
++	public Block(int var1, Material var2) {
+ 		this.stepSound = soundPowderFootstep;
+ 		this.blockParticleGravity = 1.0F;
+ 		if(blocksList[var1] != null) {
+@@ -120,10 +144,11 @@
+ 			lightOpacity[var1] = this.isOpaqueCube() ? 255 : 0;
+ 			canBlockGrass[var1] = this.renderAsNormalBlock();
+ 			isBlockFluid[var1] = false;
++			conductive[var1] = this.isConductive();
+ 		}
+ 	}
+ 
+-	protected Block(int var1, int var2, Material var3) {
++	public Block(int var1, int var2, Material var3) {
+ 		this(var1, var3);
+ 		this.blockIndexInTexture = var2;
+ 	}
+@@ -143,6 +168,11 @@
+ 		return this;
+ 	}
+ 
++	protected final Block setStepSound(StepSound var1) {
++		this.stepSound = var1;
++		return this;
++	}
++
+ 	public boolean renderAsNormalBlock() {
+ 		return true;
+ 	}
+@@ -193,11 +223,11 @@
+ 		return this.blockIndexInTexture;
+ 	}
+ 
+-	public final AxisAlignedBB getSelectedBoundingBoxFromPool(int var1, int var2, int var3) {
++	public AxisAlignedBB getSelectedBoundingBoxFromPool(int var1, int var2, int var3) {
+ 		return new AxisAlignedBB((float)var1 + this.minX, (float)var2 + this.minY, (float)var3 + this.minZ, (float)var1 + this.maxX, (float)var2 + this.maxY, (float)var3 + this.maxZ);
+ 	}
+ 
+-	public AxisAlignedBB getCollisionBoundingBoxFromPool(int var1, int var2, int var3) {
++	public AxisAlignedBB getCollisionBoundingBoxFromPool(World var0, int var1, int var2, int var3) {
+ 		return new AxisAlignedBB((float)var1 + this.minX, (float)var2 + this.minY, (float)var3 + this.minZ, (float)var1 + this.maxX, (float)var2 + this.maxY, (float)var3 + this.maxZ);
+ 	}
+ 
+@@ -265,11 +295,11 @@
+ 		}
+ 	}
+ 
+-	public final void dropBlockAsItem(World var1, int var2, int var3, int var4, int var5) {
++	public void dropBlockAsItem(World var1, int var2, int var3, int var4, int var5) {
+ 		this.dropBlockAsItemWithChance(var1, var2, var3, var4, var5, 1.0F);
+ 	}
+ 
+-	public final void dropBlockAsItemWithChance(World var1, int var2, int var3, int var4, int var5, float var6) {
++	public void dropBlockAsItemWithChance(World var1, int var2, int var3, int var4, int var5, float var6) {
+ 		int var7 = this.quantityDropped(var1.random);
+ 
+ 		for(int var8 = 0; var8 < var7; ++var8) {
+@@ -415,6 +445,37 @@
+ 	public void onBlockPlaced(World var1, int var2, int var3, int var4, int var5) {
+ 	}
+ 
++	public void onEntityCollidedWithBlock(World var1, int var2, int var3, int var4, Entity var5) {
++	}
++
++	public boolean canBlockStay(World var1, int var2, int var3, int var4) {
++		return true;
++	}
++
++	public void setBoundsForRender(World var1, int var2, int var3, int var4) {
++	}
++
++	public void velocityToAddToEntity(World var1, int var2, int var3, int var4, Vec3D var5) {
++	}
++
++	public void resetBlockBounds() {
++	}
++
++	public boolean isConductive() {
++		return false;
++	}
++
++	public boolean conductWithBlock(Block block) {
++		return true;
++	}
++
++	public boolean canReceivePower(World var1, int var2, int var3, int var4, int var5) {
++		return true;
++	}
++
++	public void onPowerReceived(World world, int x, int y, int z, int dir) {
++	}
++
+ 	static {
+ 		Block var10000 = (new BlockStone(1, 1)).setHardness(1.5F).setResistance(10.0F);
+ 		StepSound var1 = soundStoneFootstep;
+@@ -610,12 +671,12 @@
+ 		var0 = var10000;
+ 		var0.stepSound = var1;
+ 		blockSteel = var0;
+-		var10000 = (new BlockStep(43, true)).setHardness(2.0F).setResistance(10.0F);
++		var10000 = (new BlockStep(43, 6, Material.rock, true)).setHardness(2.0F).setResistance(10.0F);
+ 		var1 = soundStoneFootstep;
+ 		var0 = var10000;
+ 		var0.stepSound = var1;
+ 		stairDouble = var0;
+-		var10000 = (new BlockStep(44, false)).setHardness(2.0F).setResistance(10.0F);
++		var10000 = (new BlockStep(44, 6, Material.rock, false)).setHardness(2.0F).setResistance(10.0F);
+ 		var1 = soundStoneFootstep;
+ 		var0 = var10000;
+ 		var0.stepSound = var1;
+@@ -640,7 +701,7 @@
+ 		var0 = var10000;
+ 		var0.stepSound = var1;
+ 		cobblestoneMossy = var0;
+-		var10000 = (new BlockStone(49, 37)).setHardness(10.0F).setResistance(10.0F);
++		var10000 = (new Block(49, 37, Material.rock)).setHardness(10.0F).setResistance(2000.0F);
+ 		var1 = soundStoneFootstep;
+ 		var0 = var10000;
+ 		var0.stepSound = var1;
 --- /dev/null
 +++ net/minecraft/client/MinecraftImpl.java
 @@ -1,0 +1,14 @@
@@ -13682,6 +13683,16 @@
 +		super(var1, var2, var3, var4, var5);
 +	}
 +}
+--- net/minecraft/game/entity/monster/EntityMob.java
++++ net/minecraft/game/entity/monster/EntityMob.java
+@@ -11,6 +11,7 @@
+ 	public EntityMob(World var1) {
+ 		super(var1);
+ 		this.health = 20;
++		this.scoreValue = 100;
+ 	}
+ 
+ 	public void onLivingUpdate() {
 --- net/minecraft/game/entity/Entity.java
 +++ net/minecraft/game/entity/Entity.java
 @@ -36,6 +36,7 @@
@@ -13808,16 +13819,6 @@
  		return var2 * var2 + var3 * var3 + var4 * var4;
  	}
  
---- net/minecraft/game/entity/monster/EntityMob.java
-+++ net/minecraft/game/entity/monster/EntityMob.java
-@@ -11,6 +11,7 @@
- 	public EntityMob(World var1) {
- 		super(var1);
- 		this.health = 20;
-+		this.scoreValue = 100;
- 	}
- 
- 	public void onLivingUpdate() {
 --- /dev/null
 +++ net/minecraft/game/level/block/BlockCactus.java
 @@ -1,0 +1,74 @@
