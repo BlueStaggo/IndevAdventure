@@ -147,6 +147,25 @@
  			}
  		} finally {
  			GuiLoadLevel.unknown(this.screen, false);
+--- net/minecraft/client/render/entity/RenderTNTPrimed.java
++++ net/minecraft/client/render/entity/RenderTNTPrimed.java
+@@ -39,14 +39,14 @@
+ 
+ 		var3 = (1.0F - ((float)var7.fuse - var6 + 1.0F) / 100.0F) * 0.8F;
+ 		this.loadTexture("/terrain.png");
+-		this.blockRenderer.renderBlockOnInventory(Block.tnt);
++		this.blockRenderer.renderBlockOnInventory(Block.tnt, 0);
+ 		if(var7.fuse / 5 % 2 == 0) {
+ 			GL11.glDisable(GL11.GL_TEXTURE_2D);
+ 			GL11.glDisable(GL11.GL_LIGHTING);
+ 			GL11.glEnable(GL11.GL_BLEND);
+ 			GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_DST_ALPHA);
+ 			GL11.glColor4f(1.0F, 1.0F, 1.0F, var3);
+-			this.blockRenderer.renderBlockOnInventory(Block.tnt);
++			this.blockRenderer.renderBlockOnInventory(Block.tnt, 0);
+ 			GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+ 			GL11.glDisable(GL11.GL_BLEND);
+ 			GL11.glEnable(GL11.GL_LIGHTING);
 --- net/minecraft/game/level/EntityMap.java
 +++ net/minecraft/game/level/EntityMap.java
 @@ -3,6 +3,7 @@
@@ -401,12 +420,14 @@
  		GL11.glPushMatrix();
  		GL11.glTranslatef((float)(this.width / 2 + 90), 70.0F, 0.0F);
  		GL11.glRotatef(-20.0F, 0.0F, 0.0F, 1.0F);
-@@ -65,15 +194,23 @@
+@@ -65,15 +194,25 @@
  		drawCenteredString(this.fontRenderer, this.currentSplash, 0, -8, 16776960);
  		GL11.glPopMatrix();
  		String var16 = "Copyright Mojang Specifications. Do not distribute.";
 -		drawString(this.fontRenderer, var16, this.width - this.fontRenderer.getStringWidth(var16) - 2, this.height - 10, 16777215);
 +		drawString(this.fontRenderer, var16, this.width - this.fontRenderer.getStringWidth(var16) - 2, this.height - 10, 0xFFFFFF);
++		drawString(this.fontRenderer, Minecraft.VERSION, 2, 2, 0xFFFFFF);
++		drawString(this.fontRenderer, "by BlueStaggo", 2, 12, 0xCCCCCC);
  		long var7 = Runtime.getRuntime().maxMemory();
  		long var9 = Runtime.getRuntime().totalMemory();
  		long var11 = Runtime.getRuntime().freeMemory();
@@ -1984,6 +2005,19 @@
  				this.motionX *= 0.6F;
  				this.motionZ *= 0.6F;
  			}
+--- net/minecraft/game/item/ItemStack.java
++++ net/minecraft/game/item/ItemStack.java
+@@ -58,6 +58,10 @@
+ 		return Item.itemsList[this.itemID];
+ 	}
+ 
++	public final int getIconIndex() {
++		return this.getItem().getIconIndex(this);
++	}
++
+ 	public final NBTTagCompound writeToNBT(NBTTagCompound var1) {
+ 		var1.setShort("id", (short)this.itemID);
+ 		var1.setByte("Count", (byte)this.stackSize);
 --- /dev/null
 +++ util/DoubleArray3D.java
 @@ -1,0 +1,35 @@
@@ -2713,16 +2747,17 @@
 +}
 --- net/minecraft/client/Session.java
 +++ net/minecraft/client/Session.java
-@@ -2,6 +2,8 @@
+@@ -2,6 +2,9 @@
  
  import java.util.ArrayList;
  import java.util.List;
 +
 +import net.minecraft.game.item.Item;
++import net.minecraft.game.item.ItemStack;
  import net.minecraft.game.level.block.Block;
  
  public final class Session {
-@@ -15,7 +17,8 @@
+@@ -15,7 +18,8 @@
  	}
  
  	static {
@@ -2732,7 +2767,7 @@
  		registeredBlocksList.add(Block.cobblestone);
  		registeredBlocksList.add(Block.brick);
  		registeredBlocksList.add(Block.dirt);
-@@ -24,15 +27,26 @@
+@@ -24,15 +28,28 @@
  		registeredBlocksList.add(Block.leaves);
  		registeredBlocksList.add(Block.torch);
  		registeredBlocksList.add(Block.stairSingle);
@@ -2747,6 +2782,8 @@
 +		registeredBlocksList.add(Block.plantBlue);
  		registeredBlocksList.add(Block.mushroomBrown);
  		registeredBlocksList.add(Block.mushroomRed);
++		registeredBlocksList.add(new ItemStack(Block.brownMushroomBlock.blockID, 1, 14));
++		registeredBlocksList.add(new ItemStack(Block.redMushroomBlock.blockID, 1, 14));
 +		registeredBlocksList.add(Item.seeds);
  		registeredBlocksList.add(Block.sand);
  		registeredBlocksList.add(Block.gravel);
@@ -2759,7 +2796,7 @@
  		registeredBlocksList.add(Block.sponge);
  		registeredBlocksList.add(Block.clothRed);
  		registeredBlocksList.add(Block.clothOrange);
-@@ -52,12 +66,46 @@
+@@ -52,12 +69,46 @@
  		registeredBlocksList.add(Block.clothWhite);
  		registeredBlocksList.add(Block.oreCoal);
  		registeredBlocksList.add(Block.oreIron);
@@ -3001,7 +3038,7 @@
 -		this.worldObj.playSoundEffect(this.posX, this.posY, this.posZ, "calm", 0.0F);
 +		if (!this.worldObj.survivalWorld) {
 +			ItemStack item = this.inventory.getCurrentItem();
-+			if (item != null) {
++			if (item != null && item.isItemStackDamageable() > 0) {
 +				item.itemDamage = 0;
 +			}
 +		}
@@ -4096,6 +4133,17 @@
  		for(int var5 = var2 - 2; var5 <= var2 + 2; ++var5) {
  			for(int var6 = var3 - 2; var6 <= var3 + 2; ++var6) {
  				for(int var7 = var4 - 2; var7 <= var4 + 2; ++var7) {
+--- net/minecraft/game/item/ItemSpade.java
++++ net/minecraft/game/item/ItemSpade.java
+@@ -3,7 +3,7 @@
+ import net.minecraft.game.level.block.Block;
+ 
+ public final class ItemSpade extends ItemTool {
+-	private static Block[] blocksEffectiveAgainst = new Block[]{Block.grass, Block.dirt, Block.sand, Block.gravel};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.grass, Block.dirt, Block.sand, Block.gravel, Block.mud, Block.clay};
+ 
+ 	public ItemSpade(int var1, int var2) {
+ 		super(var1, 1, var2, blocksEffectiveAgainst);
 --- net/minecraft/game/entity/animal/EntitySheep.java
 +++ net/minecraft/game/entity/animal/EntitySheep.java
 @@ -22,7 +22,7 @@
@@ -4229,7 +4277,7 @@
  	}
 --- /dev/null
 +++ net/minecraft/game/level/block/BlockMushroomCap.java
-@@ -1,0 +1,42 @@
+@@ -1,0 +1,50 @@
 +package net.minecraft.game.level.block;
 +
 +import net.minecraft.game.level.World;
@@ -4247,6 +4295,8 @@
 +    }
 +
 +    public int getBlockTextureFromSideAndMetadata(int var1, int var2) {
++        if (var2 == 14) return this.blockIndexInTexture - 16 - this.field_35292_a;
++        if (var2 == 15) return this.blockIndexInTexture - 1;
 +        return var2 == 10 && var1 > 1 ? this.blockIndexInTexture - 1 : (var2 >= 1 && var2 <= 9 && var1 == 1 ? this.blockIndexInTexture - 16 - this.field_35292_a : (var2 >= 1 && var2 <= 3 && var1 == 2 ? this.blockIndexInTexture - 16 - this.field_35292_a : (var2 >= 7 && var2 <= 9 && var1 == 3 ? this.blockIndexInTexture - 16 - this.field_35292_a : ((var2 == 1 || var2 == 4 || var2 == 7) && var1 == 4 ? this.blockIndexInTexture - 16 - this.field_35292_a : ((var2 == 3 || var2 == 6 || var2 == 9) && var1 == 5 ? this.blockIndexInTexture - 16 - this.field_35292_a : this.blockIndexInTexture)))));
 +    }
 +
@@ -4264,6 +4314,12 @@
 +    public int idDropped(int var1, Random var2) {
 +        if (silkTouched) return this.blockID;
 +        return Block.mushroomBrown.blockID + this.field_35292_a;
++    }
++
++    public int damageDropped(int metadata, int dropId, Random var1) {
++        if (!silkTouched) return 0;
++        metadata &= 255;
++        return metadata == 10 || metadata == 15 ? 15 : 14;
 +    }
 +
 +    public void dropBlockAsItemWithChance(World var1, int var2, int var3, int var4, int var5, float var6) {
@@ -4329,15 +4385,39 @@
  import org.lwjgl.opengl.GL11;
  import util.MathHelper;
  
-@@ -58,7 +59,7 @@
+@@ -58,9 +59,9 @@
  			}
  
  			GL11.glScalef(0.4F, 0.4F, 0.4F);
 -			if(this.itemToRender.itemID < 256 && Block.blocksList[this.itemToRender.itemID].getRenderType() == 0) {
 +			if(this.itemToRender.itemID < 256 && Block.blocksList[this.itemToRender.itemID].has3DIcon()) {
  				GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/terrain.png"));
- 				this.renderBlocksInstance.renderBlockOnInventory(Block.blocksList[this.itemToRender.itemID]);
+-				this.renderBlocksInstance.renderBlockOnInventory(Block.blocksList[this.itemToRender.itemID]);
++				this.renderBlocksInstance.renderBlockOnInventory(Block.blocksList[this.itemToRender.itemID], this.itemToRender.itemDamage);
  			} else {
+ 				if(this.itemToRender.itemID < 256) {
+ 					GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/terrain.png"));
+@@ -70,13 +71,13 @@
+ 
+ 				Tessellator var11 = Tessellator.instance;
+ 				ItemStack var10 = this.itemToRender;
+-				var5 = (float)(var10.getItem().getIconIndex() % 16 << 4) / 256.0F;
+-				var10 = this.itemToRender;
+-				var1 = (float)((var10.getItem().getIconIndex() % 16 << 4) + 16) / 256.0F;
+-				var10 = this.itemToRender;
+-				var2 = (float)(var10.getItem().getIconIndex() / 16 << 4) / 256.0F;
+-				var10 = this.itemToRender;
+-				var9 = (float)((var10.getItem().getIconIndex() / 16 << 4) + 16) / 256.0F;
++				var5 = (float)(var10.getIconIndex() % 16 << 4) / 256.0F;
++				var10 = this.itemToRender;
++				var1 = (float)((var10.getIconIndex() % 16 << 4) + 16) / 256.0F;
++				var10 = this.itemToRender;
++				var2 = (float)(var10.getIconIndex() / 16 << 4) / 256.0F;
++				var10 = this.itemToRender;
++				var9 = (float)((var10.getIconIndex() / 16 << 4) + 16) / 256.0F;
+ 				GL11.glEnable(GL11.GL_NORMALIZE);
+ 				GL11.glTranslatef(0.0F, -0.3F, 0.0F);
+ 				GL11.glScalef(1.5F, 1.5F, 1.5F);
 @@ -235,12 +236,17 @@
  			GL11.glDisable(GL11.GL_BLEND);
  		}
@@ -5441,7 +5521,7 @@
  
  public final class ItemPickaxe extends ItemTool {
 -	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond};
-+	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.oreCopper, Block.blockCopper, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond, Block.brick, Block.cog, Block.ironChain, Block.goldChain, Block.copperChain, Block.activator, Block.ironGrate, Block.observer, Block.magneticPlatform, Block.diode, Block.piston, Block.pistonCopper, Block.pistonGold, Block.logicGate, Block.lampInactive, Block.lampActive};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.cobblestone, Block.stairDouble, Block.stairSingle, Block.stone, Block.cobblestoneMossy, Block.oreIron, Block.blockSteel, Block.oreCoal, Block.oreCopper, Block.blockCopper, Block.blockGold, Block.oreGold, Block.oreDiamond, Block.blockDiamond, Block.brick, Block.cog, Block.ironChain, Block.goldChain, Block.copperChain, Block.activator, Block.ironGrate, Block.observer, Block.magneticPlatform, Block.diode, Block.piston, Block.pistonCopper, Block.pistonGold, Block.logicGate, Block.lampInactive, Block.lampActive, Block.stoneOvenIdle, Block.stoneOvenActive};
  	private int harvestLevel;
  
  	public ItemPickaxe(int var1, int var2) {
@@ -5534,9 +5614,14 @@
  }
 --- net/minecraft/game/item/ItemBlock.java
 +++ net/minecraft/game/item/ItemBlock.java
-@@ -15,38 +15,42 @@
+@@ -14,40 +14,48 @@
+ 		this.setIconIndex(Block.blocksList[var1 + 256].getBlockTextureFromSide(2));
  	}
  
++	public int getIconIndex(ItemStack stack) {
++		return Block.blocksList[this.blockID].getBlockTextureFromSideAndMetadata(2, stack.itemDamage);
++	}
++
  	public final boolean onItemUse(ItemStack var1, World var2, int var3, int var4, int var5, int var6) {
 -		if(var6 == 0) {
 -			--var4;
@@ -5600,11 +5685,13 @@
 +			if(var10 == null || var10.displace(var2, var3, var4, var5)) {
  				var10 = Block.blocksList[this.blockID];
 -				AxisAlignedBB var8 = var10.getCollisionBoundingBoxFromPool(var3, var4, var5);
+-				if(var2.checkIfAABBIsClear(var8) && var10.canPlaceBlockAt(var2, var3, var4, var5) && var2.setBlockWithNotify(var3, var4, var5, this.blockID)) {
 +				AxisAlignedBB var8 = var10.getCollisionBoundingBoxFromPool(var2, var3, var4, var5);
- 				if(var2.checkIfAABBIsClear(var8) && var10.canPlaceBlockAt(var2, var3, var4, var5) && var2.setBlockWithNotify(var3, var4, var5, this.blockID)) {
++				if(var2.checkIfAABBIsClear(var8) && var10.canPlaceBlockAt(var2, var3, var4, var5) && var2.setBlockAndMetadataWithNotify(var3, var4, var5, this.blockID, var1.itemDamage)) {
  					Block.blocksList[this.blockID].onBlockPlaced(var2, var3, var4, var5, var6);
  					float var10001 = (float)var3 + 0.5F;
-@@ -57,7 +61,9 @@
+ 					float var10002 = (float)var4 + 0.5F;
+@@ -57,7 +65,9 @@
  					float var10005 = (var9.soundVolume + 1.0F) / 2.0F;
  					var9 = var10.stepSound;
  					var2.playSoundAtPlayer(var10001, var10002, var10003, var10004, var10005, var9.soundPitch * 0.8F);
@@ -5888,7 +5975,7 @@
 +}
 --- /dev/null
 +++ net/minecraft/client/gui/GuiSelectBlock.java
-@@ -1,0 +1,180 @@
+@@ -1,0 +1,190 @@
 +package net.minecraft.client.gui;
 +
 +import net.minecraft.client.ItemTooltips;
@@ -5950,6 +6037,8 @@
 +				id = ((Item)item).shiftedIndex;
 +			} else if (item instanceof Block) {
 +				id = ((Block)item).blockID;
++			} else if (item instanceof ItemStack) {
++				id = ((ItemStack)item).itemID;
 +			}
 +			if (id > 0) {
 +				String tooltip = ItemTooltips.get(id);
@@ -5974,11 +6063,15 @@
 +            int ty = this.height / 2 + i / 9 * 24 - 60;
 +			Object registry = Session.registeredBlocksList.get(i + this.page * 9);
 +			int id = 0;
++			int damage = 0;
 +
 +			if (registry instanceof Block) {
 +				id = ((Block)registry).blockID;
 +			} else if (registry instanceof Item) {
 +				id = ((Item)registry).shiftedIndex;
++			} else if (registry instanceof ItemStack) {
++				id = ((ItemStack)registry).itemID;
++				damage = ((ItemStack)registry).itemDamage;
 +			}
 +
 +			if (id > 0) {
@@ -5989,7 +6082,7 @@
 +					GL11.glTranslatef(-tx - 8, -ty - 8, 0.0F);
 +				}
 +
-+				itemRenderer.renderItemIntoGUI(this.mc.renderEngine, new ItemStack(id), tx + 1, ty - 2);
++				itemRenderer.renderItemIntoGUI(this.mc.renderEngine, new ItemStack(id, 1, damage), tx + 1, ty - 2);
 +
 +				if (tile == i) {
 +					GL11.glPopMatrix();
@@ -6017,16 +6110,20 @@
 +			if (tile >= 0) {
 +				Object registry = Session.registeredBlocksList.get(tile + this.page * 9);
 +				int id = 0;
++				int damage = 0;
 +
 +				if (registry instanceof Block) {
 +					id = ((Block)registry).blockID;
 +				} else if (registry instanceof Item) {
 +					id = ((Item)registry).shiftedIndex;
++				} else if (registry instanceof ItemStack) {
++					id = ((ItemStack)registry).itemID;
++					damage = ((ItemStack)registry).itemDamage;
 +				}
 +
 +				for (int i = 0; i < 9; i++) {
 +					ItemStack hotbarItem = this.mc.thePlayer.inventory.getStackInSlot(i);
-+					if (hotbarItem != null && hotbarItem.itemID == id) {
++					if (hotbarItem != null && hotbarItem.itemID == id && hotbarItem.itemDamage == damage) {
 +						ItemStack oldItem = this.mc.thePlayer.inventory.getCurrentItem();
 +						this.mc.thePlayer.inventory.setInventorySlotContents(this.mc.thePlayer.inventory.currentItem, hotbarItem);
 +						this.mc.thePlayer.inventory.setInventorySlotContents(i, oldItem);
@@ -6036,7 +6133,7 @@
 +				}
 +
 +				int slot = this.mc.thePlayer.inventory.currentItem;
-+				this.mc.thePlayer.inventory.setInventorySlotContents(slot, new ItemStack(id));
++				this.mc.thePlayer.inventory.setInventorySlotContents(slot, new ItemStack(id, 1, damage));
 +			}
 +		}
 +
@@ -7472,7 +7569,7 @@
  	public final void drawScreen(int var1, int var2, float var3) {
 --- net/minecraft/game/item/recipe/CraftingManager.java
 +++ net/minecraft/game/item/recipe/CraftingManager.java
-@@ -20,24 +20,57 @@
+@@ -20,24 +20,58 @@
  		(new RecipesTools()).addRecipes(this);
  		(new RecipesWeapons()).addRecipes(this);
  		(new RecipesIngots()).addRecipes(this);
@@ -7484,7 +7581,6 @@
 -		this.addRecipe(new ItemStack(Block.stoneOvenIdle), new Object[]{"###", "# #", "###", Character.valueOf('#'), Block.cobblestone});
 -		this.addRecipe(new ItemStack(Block.workbench), new Object[]{"##", "##", Character.valueOf('#'), Block.planks});
 +		(new RecipesMechanics()).addRecipes(this);
-+		this.addRecipe(new ItemStack(Item.ingotCopper, 4), "#", '#', Block.blockCopper);
 +		this.addRecipe(new ItemStack(Item.bucketEmpty, 1), "# #", " # ", '#', Item.ingotIron);
 +		this.addRecipe(new ItemStack(Item.bowlSoup), "Y", "X", "#", 'X', Block.mushroomBrown, 'Y', Block.mushroomRed, '#', Item.bowlEmpty);
 +		this.addRecipe(new ItemStack(Item.bowlSoup), "Y", "X", "#", 'X', Block.mushroomRed, 'Y', Block.mushroomBrown, '#', Item.bowlEmpty);
@@ -7517,6 +7613,8 @@
 +		this.addRecipe(new ItemStack(Block.clay, 1), "##", "##", '#', Item.clay);
 +		this.addRecipe(new ItemStack(Item.clay, 4), "#", '#', Block.clay);
 +		this.addRecipe(new ItemStack(Block.brick, 1), "##", "##", '#', Item.brick);
++		this.addRecipe(new ItemStack(Block.brownMushroomBlock.blockID, 1, 14), "##", "##", '#', Block.mushroomBrown);
++		this.addRecipe(new ItemStack(Block.redMushroomBlock.blockID, 1, 14), "##", "##", '#', Block.mushroomRed);
 +
 +		for (int i = 0; i < 15; i++) {
 +			this.addRecipe(new ItemStack(Block.clothRed.blockID + i, 8), "###", "#X#", "###", '#', Block.clothWhite, 'X', Item.itemsList[Item.dyeRed.shiftedIndex + i]);
@@ -7547,7 +7645,7 @@
  		Collections.sort(this.recipes, new RecipeSorter(this));
  		System.out.println(this.recipes.size() + " recipes");
  	}
-@@ -77,15 +110,15 @@
+@@ -77,15 +111,15 @@
  				var15 = ((Block)var2[var4 + 1]).blockID;
  			}
  
@@ -7566,7 +7664,7 @@
  			} else {
  				var14[var15] = -1;
  			}
-@@ -103,5 +136,17 @@
+@@ -103,5 +137,17 @@
  		}
  
  		return null;
@@ -8178,7 +8276,7 @@
  }
 --- /dev/null
 +++ net/minecraft/game/level/block/BlockDiode.java
-@@ -1,0 +1,58 @@
+@@ -1,0 +1,59 @@
 +package net.minecraft.game.level.block;
 +
 +import net.minecraft.game.entity.player.EntityPlayer;
@@ -8222,7 +8320,8 @@
 +	}
 +
 +	public boolean canReceivePower(World var1, int var2, int var3, int var4, int var5) {
-+		return var5 >= 0 && var5 != (var1.getBlockMetadata(var2, var3, var4) & 7);
++		int dir = var1.getBlockMetadata(var2, var3, var4) & 7;
++		return var5 == dir / 2 * 2 + 1 - dir % 2;
 +	}
 +
 +	public void onPowerReceived(World world, int x, int y, int z, int dir) {
@@ -9085,6 +9184,39 @@
  				var9 = var2.itemID;
  				RenderEngine.bindTexture(var1.getTexture("/terrain.png"));
  				Block var8 = Block.blocksList[var9];
+@@ -35,10 +35,10 @@
+ 				GL11.glRotatef(210.0F, 1.0F, 0.0F, 0.0F);
+ 				GL11.glRotatef(45.0F, 0.0F, 1.0F, 0.0F);
+ 				GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+-				this.renderBlocks.renderBlockOnInventory(var8);
++				this.renderBlocks.renderBlockOnInventory(var8, var2.itemDamage);
+ 				GL11.glPopMatrix();
+ 			} else {
+-				if(var2.getItem().getIconIndex() >= 0) {
++				if(var2.getIconIndex() >= 0) {
+ 					GL11.glDisable(GL11.GL_LIGHTING);
+ 					if(var2.itemID < 256) {
+ 						RenderEngine.bindTexture(var1.getTexture("/terrain.png"));
+@@ -48,8 +48,8 @@
+ 
+ 					int var10000 = var3;
+ 					int var10001 = var4;
+-					int var10002 = var2.getItem().getIconIndex() % 16 << 4;
+-					int var10003 = var2.getItem().getIconIndex() / 16 << 4;
++					int var10002 = var2.getIconIndex() % 16 << 4;
++					int var10003 = var2.getIconIndex() / 16 << 4;
+ 					boolean var6 = true;
+ 					var6 = true;
+ 					var4 = var10003;
+@@ -81,7 +81,7 @@
+ 				GL11.glEnable(GL11.GL_DEPTH_TEST);
+ 			}
+ 
+-			if(var2.itemDamage > 0) {
++			if(var2.itemDamage > 0 && var2.isItemStackDamageable() > 0) {
+ 				int var9 = 13 - var2.itemDamage * 13 / var2.isItemStackDamageable();
+ 				int var7 = 255 - var2.itemDamage * 255 / var2.isItemStackDamageable();
+ 				GL11.glDisable(GL11.GL_LIGHTING);
 @@ -135,13 +135,10 @@
  
  		GL11.glTranslatef(var2, var3 + var8, var4);
@@ -9100,6 +9232,21 @@
  
  			GL11.glScalef(var2, var2, var2);
  
+@@ -154,12 +151,12 @@
+ 					GL11.glTranslatef(var4, var5, var6);
+ 				}
+ 
+-				var12.renderBlocks.renderBlockOnInventory(Block.blocksList[var7.itemID]);
++				var12.renderBlocks.renderBlockOnInventory(Block.blocksList[var7.itemID], var7.itemDamage);
+ 				GL11.glPopMatrix();
+ 			}
+ 		} else {
+ 			GL11.glScalef(0.5F, 0.5F, 0.5F);
+-			int var14 = var7.getItem().getIconIndex();
++			int var14 = var7.getIconIndex();
+ 			if(var7.itemID < 256) {
+ 				this.loadTexture("/terrain.png");
+ 			} else {
 --- net/minecraft/game/item/ItemAxe.java
 +++ net/minecraft/game/item/ItemAxe.java
 @@ -3,7 +3,7 @@
@@ -9107,7 +9254,7 @@
  
  public final class ItemAxe extends ItemTool {
 -	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate};
-+	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle, Block.woodenGrate, Block.brownMushroomBlock, Block.redMushroomBlock};
++	private static Block[] blocksEffectiveAgainst = new Block[]{Block.planks, Block.bookShelf, Block.wood, Block.leaves, Block.crate, Block.workbench, Block.woodStairDouble, Block.woodStairSingle, Block.woodenGrate, Block.brownMushroomBlock, Block.redMushroomBlock};
  
  	public ItemAxe(int var1, int var2) {
  		super(var1, 3, var2, blocksEffectiveAgainst);
@@ -10539,7 +10686,47 @@
  	}
  
  	protected void drawGuiContainerForegroundLayer() {
-@@ -244,13 +268,36 @@
+@@ -143,7 +167,7 @@
+ 
+ 					ItemStack var9;
+ 					if(!var11.isItemValid(this.itemStack)) {
+-						if(var12.itemID == this.itemStack.itemID) {
++						if(var12.itemID == this.itemStack.itemID && var12.itemDamage == this.itemStack.itemDamage) {
+ 							var9 = this.itemStack;
+ 							if(var9.getItem().getItemStackLimit() > 1) {
+ 								var6 = var12.stackSize;
+@@ -169,7 +193,7 @@
+ 						return;
+ 					}
+ 
+-					if(var12.itemID != this.itemStack.itemID) {
++					if(var12.itemID != this.itemStack.itemID || var12.itemDamage != this.itemStack.itemDamage) {
+ 						if(this.itemStack.stackSize > var11.inventory.getInventoryStackLimit()) {
+ 							return;
+ 						}
+@@ -177,10 +201,6 @@
+ 						var11.putStack(this.itemStack);
+ 						this.itemStack = var12;
+ 					} else {
+-						if(var12.itemID != this.itemStack.itemID) {
+-							return;
+-						}
+-
+ 						if(var3 == 0) {
+ 							var6 = this.itemStack.stackSize;
+ 							if(var6 > var11.inventory.getInventoryStackLimit() - var12.stackSize) {
+@@ -200,10 +220,6 @@
+ 
+ 							var12.stackSize += var6;
+ 						} else {
+-							if(var3 != 1) {
+-								return;
+-							}
+-
+ 							var6 = 1;
+ 							if(1 > var11.inventory.getInventoryStackLimit() - var12.stackSize) {
+ 								var6 = var11.inventory.getInventoryStackLimit() - var12.stackSize;
+@@ -244,13 +260,36 @@
  			}
  		}
  
@@ -10978,7 +11165,7 @@
 +}
 --- net/minecraft/client/controller/PlayerControllerSP.java
 +++ net/minecraft/client/controller/PlayerControllerSP.java
-@@ -5,6 +5,7 @@
+@@ -5,10 +5,12 @@
  import net.minecraft.client.sound.SoundManager;
  import net.minecraft.game.item.Item;
  import net.minecraft.game.item.ItemStack;
@@ -10986,7 +11173,12 @@
  import net.minecraft.game.level.MobSpawner;
  import net.minecraft.game.level.World;
  import net.minecraft.game.level.block.Block;
-@@ -26,18 +27,24 @@
+ import net.minecraft.game.level.block.StepSound;
++import util.MathHelper;
+ 
+ public final class PlayerControllerSP extends PlayerController {
+ 	private int curBlockX = -1;
+@@ -26,18 +28,24 @@
  
  	public final boolean sendBlockRemoved(int var1, int var2, int var3) {
  		int var4 = this.mc.theWorld.getBlockId(var1, var2, var3);
@@ -11014,6 +11206,25 @@
  			Block.blocksList[var4].dropBlockAsItem(this.mc.theWorld, var1, var2, var3, var5);
  		}
  
+@@ -66,7 +74,8 @@
+ 				var4 = this.mc.theWorld.getBlockId(var1, var2, var3);
+ 				if(var4 != 0) {
+ 					Block var6 = Block.blocksList[var4];
+-					this.curBlockDamage += var6.blockStrength(this.mc.thePlayer);
++					float strength = var6.blockStrength(this.mc.thePlayer);
++					this.curBlockDamage += strength;
+ 					if(this.blockDestroySoundCounter % 4.0F == 0.0F && var6 != null) {
+ 						SoundManager var10000 = this.mc.sndManager;
+ 						String var10001 = var6.stepSound.stepSoundDir2();
+@@ -85,7 +94,7 @@
+ 						this.curBlockDamage = 0.0F;
+ 						this.prevBlockDamage = 0.0F;
+ 						this.blockDestroySoundCounter = 0.0F;
+-						this.blockHitWait = 5;
++						this.blockHitWait = MathHelper.clamp(Math.round((1.0F - strength) * 5.0F), 0, 5);
+ 					}
+ 
+ 				}
 --- net/minecraft/game/level/block/BlockBreakable.java
 +++ net/minecraft/game/level/block/BlockBreakable.java
 @@ -6,7 +6,7 @@
@@ -11353,7 +11564,7 @@
 +		Block block = Block.blocksList[world.getBlockId(x, y, z)];
 +		if (block == null) return null;
 +		if (block.isOpaqueCube()) return block;
-+		if (block instanceof BlockChain) return block;
++		if (block instanceof BlockChain || block instanceof BlockGears) return block;
 +		return null;
  	}
  }
@@ -11537,12 +11748,7 @@
  import net.minecraft.game.entity.Entity;
  import net.minecraft.game.entity.EntityPainting;
  import net.minecraft.game.entity.animal.EntityPig;
-@@ -21,10 +21,14 @@
- import net.minecraft.game.entity.monster.EntitySkeleton;
- import net.minecraft.game.entity.monster.EntitySpider;
- import net.minecraft.game.entity.monster.EntityZombie;
-+import net.minecraft.game.entity.player.EntityPlayer;
- import net.minecraft.game.level.block.Block;
+@@ -25,6 +25,9 @@
  import net.minecraft.game.level.block.tileentity.TileEntity;
  import net.minecraft.game.level.block.tileentity.TileEntityChest;
  import net.minecraft.game.level.block.tileentity.TileEntityFurnace;
@@ -11552,7 +11758,7 @@
  import util.IProgressUpdate;
  
  public abstract class LevelLoader {
-@@ -63,6 +67,7 @@
+@@ -63,6 +66,7 @@
  		var9.authorName = var2.getString("Author");
  		var9.name = var2.getString("Name");
  		var9.createTime = var2.getLong("CreatedOn");
@@ -11560,7 +11766,7 @@
  		var9.cloudColor = var4.getInteger("CloudColor");
  		var9.skyColor = var4.getInteger("SkyColor");
  		var9.fogColor = var4.getInteger("FogColor");
-@@ -81,7 +86,10 @@
+@@ -81,7 +85,10 @@
  		var9.defaultFluid = var4.getByte("SurroundingWaterType");
  		var9.worldTime = var4.getShort("TimeOfDay");
  		var9.skylightSubtracted = var9.getSkyBrightness();
@@ -11572,7 +11778,7 @@
  		if(this.guiLoading != null) {
  			this.guiLoading.displayLoadingString("Preparing entities..");
  		}
-@@ -134,6 +142,10 @@
+@@ -134,6 +141,10 @@
  	}
  
  	public final void save(World var1, OutputStream var2) throws IOException {
@@ -11583,7 +11789,7 @@
  		if(this.guiLoading != null) {
  			this.guiLoading.displayProgressMessage("Saving level");
  		}
-@@ -153,12 +165,17 @@
+@@ -153,12 +164,17 @@
  		var3.setByte("SurroundingGroundType", (byte)Block.grass.blockID);
  		var3.setByte("SurroundingWaterType", (byte)var1.defaultFluid);
  		var3.setShort("TimeOfDay", (short)var1.worldTime);
@@ -11601,7 +11807,7 @@
  		NBTTagList var5 = new NBTTagList();
  		var5.setTag(new NBTTagShort((short)var1.xSpawn));
  		var5.setTag(new NBTTagShort((short)var1.ySpawn));
-@@ -168,6 +185,7 @@
+@@ -168,6 +184,7 @@
  		var15.setString("Author", var1.authorName);
  		var15.setString("Name", var1.name);
  		var15.setLong("CreatedOn", var1.createTime);
@@ -11609,7 +11815,7 @@
  		if(this.guiLoading != null) {
  			this.guiLoading.displayLoadingString("Preparing entities..");
  		}
-@@ -209,12 +227,18 @@
+@@ -209,12 +226,18 @@
  
  		NBTTagCompound var13 = var18;
  		DataOutputStream var14 = new DataOutputStream(new GZIPOutputStream(var2));
@@ -12093,7 +12299,7 @@
 +        TOOLTIPS[14] = "Gold Ore";
 +        TOOLTIPS[15] = "Iron Ore";
 +        TOOLTIPS[16] = "Coal Ore";
-+        TOOLTIPS[17] = "Log";
++        TOOLTIPS[17] = "Wood";
 +        TOOLTIPS[18] = "Leaves";
 +        TOOLTIPS[19] = "Sponge";
 +        TOOLTIPS[20] = "Glass";
@@ -12282,6 +12488,37 @@
  	public final ItemStack getCurrentItem() {
  		return this.mainInventory[this.currentItem];
  	}
+@@ -59,10 +66,11 @@
+ 	}
+ 
+ 	public final boolean storePartialItemStack(ItemStack var1) {
+-		if(var1.itemDamage == 0) {
++		if(var1.itemDamage == 0 || true) {
+ 			int var4 = var1.stackSize;
+ 			int var3 = var1.itemID;
+ 			int var6 = var3;
++			int var6a = var1.itemDamage;
+ 			InventoryPlayer var5 = this;
+ 			int var7 = 0;
+ 
+@@ -74,7 +82,7 @@
+ 					break;
+ 				}
+ 
+-				if(var5.mainInventory[var7] != null && var5.mainInventory[var7].itemID == var6) {
++				if(var5.mainInventory[var7] != null && var5.mainInventory[var7].itemID == var6 && var5.mainInventory[var7].itemDamage == var6a) {
+ 					var8 = var5.mainInventory[var7];
+ 					if(var5.mainInventory[var7].stackSize < var8.getItem().getItemStackLimit() && var5.mainInventory[var7].stackSize < 64) {
+ 						var10001 = var7;
+@@ -94,7 +102,7 @@
+ 				var10001 = var4;
+ 			} else {
+ 				if(this.mainInventory[var9] == null) {
+-					this.mainInventory[var9] = new ItemStack(var3, 0);
++					this.mainInventory[var9] = new ItemStack(var3, 0, var6a);
+ 				}
+ 
+ 				var3 = var4;
 --- com/mojang/nbt/NBTBase.java
 +++ com/mojang/nbt/NBTBase.java
 @@ -71,6 +71,8 @@
@@ -12384,8 +12621,9 @@
  		return this;
  	}
  
- 	public final int getIconIndex() {
+-	public final int getIconIndex() {
 -		return this.iconIndex;
++	public int getIconIndex(ItemStack stack) {
 +		return this.icon;
  	}
  
@@ -12969,7 +13207,7 @@
  		} else {
  			float var11;
  			float var22;
-@@ -409,32 +347,159 @@
+@@ -409,32 +347,171 @@
  						var13 = ((float)var23 + 15.99F) / 256.0F;
  						var14 = (float)var9 / 256.0F;
  						var15 = ((float)var9 + 15.99F) / 256.0F;
@@ -13012,6 +13250,8 @@
 +								var6.addVertexWithUV((float) var3 + 0.05F, (float) (var4 + 1) + 2.0F / 16.0F, (float) var5 - 2.0F / 16.0F, var11, var22);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 1;
 +							}
 +						}
 +
@@ -13024,6 +13264,8 @@
 +								var6.addVertexWithUV((float) (var3 + 1) - 0.05F, (float) var4 - 2.0F / 16.0F, (float) var5 - 2.0F / 16.0F, var10, var20);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 0;
 +							}
 +						}
 +
@@ -13036,6 +13278,8 @@
 +								var6.addVertexWithUV((float) var3 - 2.0F / 16.0F, (float) var4 + 0.05F, (float) var5 - 2.0F / 16.0F, var10, var22);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 3;
 +							}
 +						}
 +
@@ -13048,6 +13292,8 @@
 +								var6.addVertexWithUV((float) (var3 + 1) + 2.0F / 16.0F, (float) (var4 + 1) - 0.05F, (float) var5 - 2.0F / 16.0F, var11, var22);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 2;
 +							}
 +						}
 +
@@ -13060,6 +13306,8 @@
 +								var6.addVertexWithUV((float) var3 - 2.0F / 16.0F, (float) var4 - 2.0F / 16.0F, (float) var5 + 0.05F, var12, var15);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 5;
 +							}
 +						}
 +
@@ -13072,6 +13320,8 @@
 +								var6.addVertexWithUV((float) var3 - 2.0F / 16.0F, (float) (var4 + 1) + 2.0F / 16.0F, (float) (var5 + 1) - 0.05F, var13, var14);
 +							} else if (attachment instanceof BlockChain) {
 +								chain = attachment;
++							} else if (attachment instanceof BlockGears) {
++								beamState |= 1 << 4;
 +							}
 +						}
 +
@@ -13155,7 +13405,7 @@
  						}
  
  						return true;
-@@ -446,6 +511,80 @@
+@@ -446,6 +523,80 @@
  		}
  	}
  
@@ -13236,7 +13486,7 @@
  	private void renderBlockTorch(Block var1, float var2, float var3, float var4, float var5, float var6) {
  		Tessellator var7 = Tessellator.instance;
  		int var19 = var1.getBlockTextureFromSide(0);
-@@ -581,6 +720,151 @@
+@@ -581,6 +732,151 @@
  		var6.addVertexWithUV(var10, var4 + 1.0F, var12, var14, var8);
  	}
  
@@ -13388,7 +13638,7 @@
  	private float materialNotWater(int var1, int var2, int var3) {
  		return this.blockAccess.getBlockMaterial(var1, var2, var3) != Material.water ? 1.0F : (float)this.blockAccess.getBlockMetadata(var1, var2, var3) / 9.0F;
  	}
-@@ -593,15 +877,15 @@
+@@ -593,15 +889,15 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13413,7 +13663,7 @@
  		var6.addVertexWithUV(var10, var3, var12, var8, var13);
  		var6.addVertexWithUV(var10, var3, var11, var8, var9);
  		var6.addVertexWithUV(var2, var3, var11, var14, var9);
-@@ -616,15 +900,15 @@
+@@ -616,15 +912,15 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13438,7 +13688,7 @@
  		var6.addVertexWithUV(var2, var3, var12, var14, var13);
  		var6.addVertexWithUV(var2, var3, var11, var14, var9);
  		var6.addVertexWithUV(var10, var3, var11, var8, var9);
-@@ -639,8 +923,8 @@
+@@ -639,8 +935,8 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13449,7 +13699,7 @@
  		float var9;
  		float var15;
  		if(var1.minY >= 0.0F && var1.maxY <= 1.0F) {
-@@ -651,11 +935,17 @@
+@@ -651,11 +947,17 @@
  			var15 = ((float)var5 + 15.99F) / 256.0F;
  		}
  
@@ -13472,7 +13722,7 @@
  		var6.addVertexWithUV(var10, var14, var12, var16, var9);
  		var6.addVertexWithUV(var13, var14, var12, var8, var9);
  		var6.addVertexWithUV(var13, var11, var12, var8, var15);
-@@ -670,8 +960,8 @@
+@@ -670,8 +972,8 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13483,7 +13733,7 @@
  		float var9;
  		float var15;
  		if(var1.minY >= 0.0F && var1.maxY <= 1.0F) {
-@@ -682,11 +972,17 @@
+@@ -682,11 +984,17 @@
  			var15 = ((float)var5 + 15.99F) / 256.0F;
  		}
  
@@ -13506,7 +13756,7 @@
  		var6.addVertexWithUV(var10, var14, var12, var8, var9);
  		var6.addVertexWithUV(var10, var11, var12, var8, var15);
  		var6.addVertexWithUV(var13, var11, var12, var16, var15);
-@@ -701,8 +997,8 @@
+@@ -701,8 +1009,8 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13517,7 +13767,7 @@
  		float var9;
  		float var15;
  		if(var1.minY >= 0.0F && var1.maxY <= 1.0F) {
-@@ -713,11 +1009,17 @@
+@@ -713,11 +1021,17 @@
  			var15 = ((float)var5 + 15.99F) / 256.0F;
  		}
  
@@ -13540,7 +13790,7 @@
  		var6.addVertexWithUV(var13, var14, var12, var16, var9);
  		var6.addVertexWithUV(var13, var14, var11, var8, var9);
  		var6.addVertexWithUV(var13, var10, var11, var8, var15);
-@@ -732,8 +1034,8 @@
+@@ -732,8 +1046,8 @@
  
  		int var7 = (var5 & 15) << 4;
  		var5 &= 240;
@@ -13551,7 +13801,7 @@
  		float var9;
  		float var15;
  		if(var1.minY >= 0.0F && var1.maxY <= 1.0F) {
-@@ -744,11 +1046,17 @@
+@@ -744,45 +1058,52 @@
  			var15 = ((float)var5 + 15.99F) / 256.0F;
  		}
  
@@ -13574,8 +13824,11 @@
  		var6.addVertexWithUV(var13, var10, var12, var8, var15);
  		var6.addVertexWithUV(var13, var10, var11, var16, var15);
  		var6.addVertexWithUV(var13, var14, var11, var16, var9);
-@@ -758,7 +1066,8 @@
- 	public final void renderBlockOnInventory(Block var1) {
+ 		var6.addVertexWithUV(var13, var14, var12, var8, var9);
+ 	}
+ 
+-	public final void renderBlockOnInventory(Block var1) {
++	public final void renderBlockOnInventory(Block var1, int meta) {
  		Tessellator var2 = Tessellator.instance;
  		int var3 = var1.getRenderType();
 -		if(var3 == 0) {
@@ -13584,7 +13837,37 @@
  			GL11.glTranslatef(-0.5F, -0.5F, -0.5F);
  			var2.startDrawingQuads();
  			Tessellator.setNormal(0.0F, -1.0F, 0.0F);
-@@ -795,14 +1104,11 @@
+-			this.renderBlockBottom(var1, 0.0F, 0.0F, 0.0F, var1.getBlockTextureFromSide(0));
++			this.renderBlockBottom(var1, 0.0F, 0.0F, 0.0F, var1.getBlockTextureFromSideAndMetadata(0, meta));
+ 			var2.draw();
+ 			var2.startDrawingQuads();
+ 			Tessellator.setNormal(0.0F, 1.0F, 0.0F);
+-			this.renderBlockTop(var1, 0.0F, 0.0F, 0.0F, var1.getBlockTextureFromSide(1));
++			this.renderBlockTop(var1, 0.0F, 0.0F, 0.0F, var1.getBlockTextureFromSideAndMetadata(1, meta));
+ 			var2.draw();
+ 			var2.startDrawingQuads();
+ 			Tessellator.setNormal(0.0F, 0.0F, -1.0F);
+-			this.renderBlockNorth(var1, 0, 0, 0, var1.getBlockTextureFromSide(2));
++			this.renderBlockNorth(var1, 0, 0, 0, var1.getBlockTextureFromSideAndMetadata(2, meta));
+ 			var2.draw();
+ 			var2.startDrawingQuads();
+ 			Tessellator.setNormal(0.0F, 0.0F, 1.0F);
+-			this.renderBlockSouth(var1, 0, 0, 0, var1.getBlockTextureFromSide(3));
++			this.renderBlockSouth(var1, 0, 0, 0, var1.getBlockTextureFromSideAndMetadata(3, meta));
+ 			var2.draw();
+ 			var2.startDrawingQuads();
+ 			Tessellator.setNormal(-1.0F, 0.0F, 0.0F);
+-			this.renderBlockWest(var1, 0, 0, 0, var1.getBlockTextureFromSide(4));
++			this.renderBlockWest(var1, 0, 0, 0, var1.getBlockTextureFromSideAndMetadata(4, meta));
+ 			var2.draw();
+ 			var2.startDrawingQuads();
+ 			Tessellator.setNormal(1.0F, 0.0F, 0.0F);
+-			this.renderBlockEast(var1, 0, 0, 0, var1.getBlockTextureFromSide(5));
++			this.renderBlockEast(var1, 0, 0, 0, var1.getBlockTextureFromSideAndMetadata(5, meta));
+ 			var2.draw();
+ 			GL11.glTranslatef(0.5F, 0.5F, 0.5F);
+ 		} else if(var3 == 1) {
+@@ -795,14 +1116,11 @@
  			Tessellator.setNormal(0.0F, -1.0F, 0.0F);
  			this.renderBlockCrops(var1, -1, -0.5F, -0.5F, -0.5F);
  			var2.draw();
@@ -15578,7 +15861,7 @@
  
 -public final class Minecraft implements Runnable {
 +public class Minecraft implements Runnable {
-+	public static final String VERSION = "Indev Adventure 20250409";
++	public static final String VERSION = "Indev Adventure 20250410";
 +	public static final int AUTOSAVE_INTERVAL = 60 * 20;
 +
 +	public static final Set<Character> VALID_PATH_CHARACTERS; static {
@@ -15739,15 +16022,17 @@
  		}
  	}
  
-@@ -451,7 +483,6 @@
+@@ -449,9 +481,7 @@
+ 
+ 			if(this.objectMouseOver == null) {
  				if(var1 == 0 && !(this.playerController instanceof PlayerControllerCreative)) {
- 					this.leftClickCounter = 10;
+-					this.leftClickCounter = 10;
  				}
 -
  			} else {
  				ItemStack var9;
  				if(this.objectMouseOver.typeOfHit == 1) {
-@@ -462,7 +493,9 @@
+@@ -462,7 +492,9 @@
  						var9 = var11.getStackInSlot(var11.currentItem);
  						int var17 = var9 != null ? Item.itemsList[var9.itemID].getDamageVsEntity() : 1;
  						if(var17 > 0) {
@@ -15758,7 +16043,7 @@
  							var2 = var12.inventory.getCurrentItem();
  							if(var2 != null && var14 instanceof EntityLiving) {
  								EntityLiving var8 = (EntityLiving)var14;
-@@ -490,7 +523,9 @@
+@@ -490,7 +522,9 @@
  					} else {
  						var9 = this.thePlayer.inventory.getCurrentItem();
  						int var16 = this.theWorld.getBlockId(var10, var3, var13);
@@ -15769,7 +16054,7 @@
  							return;
  						}
  
-@@ -629,19 +664,37 @@
+@@ -629,19 +663,37 @@
  
  								if(Mouse.getEventButton() == 2 && Mouse.getEventButtonState() && this.objectMouseOver != null) {
  									var2 = this.theWorld.getBlockId(this.objectMouseOver.blockX, this.objectMouseOver.blockY, this.objectMouseOver.blockZ);
@@ -15813,7 +16098,7 @@
  								}
  							}
  						} else if(this.currentScreen != null) {
-@@ -719,12 +772,28 @@
+@@ -719,12 +771,28 @@
  										}
  									}
  
@@ -15844,7 +16129,7 @@
  									}
  
  									if(Keyboard.getEventKey() == this.options.keyBindDrop.keyCode) {
-@@ -768,58 +837,74 @@
+@@ -768,58 +836,74 @@
  			}
  		}
  
@@ -15955,7 +16240,7 @@
  	}
  
  	public final void setLevel(World var1) {
-@@ -827,18 +912,12 @@
+@@ -827,18 +911,12 @@
  			this.theWorld.setLevel();
  		}
  
@@ -15978,7 +16263,7 @@
  			this.playerController.onWorldChange(var1);
  			this.thePlayer = (EntityPlayerSP)var1.findSubclassOf(EntityPlayerSP.class);
  			var1.playerEntity = this.thePlayer;
-@@ -864,16 +943,383 @@
+@@ -864,16 +942,383 @@
  				this.effectRenderer.clearEffects(var1);
  			}
  
@@ -16120,7 +16405,7 @@
 +		}
 +
 +		File levelsDir = new File(this.mcDataDir, "inadv-levels");
-+		File levelFile = new File(levelsDir, path);
++		File levelFile = new File(levelsDir, path + ".mclevel");
 +		if (!levelFile.exists()) return;
 +		this.adventureMode = false;
 +
@@ -16141,7 +16426,7 @@
 +		}
 +
 +		File levelsDir = new File(this.mcDataDir, "inadv-levels");
-+		File levelFile = new File(levelsDir, path);
++		File levelFile = new File(levelsDir, path + ".mclevel");
 +		if (!levelsDir.mkdirs() && !levelsDir.isDirectory()) return;
 +		this.adventureMode = false;
 +
@@ -16946,10 +17231,17 @@
 +}
 --- net/minecraft/game/item/recipe/CraftingRecipe.java
 +++ net/minecraft/game/item/recipe/CraftingRecipe.java
-@@ -61,4 +61,18 @@
+@@ -55,10 +55,24 @@
+ 	}
+ 
+ 	public final ItemStack createResult() {
+-		return new ItemStack(this.recipeOutput.itemID, this.recipeOutput.stackSize);
++		return new ItemStack(this.recipeOutput.itemID, this.recipeOutput.stackSize, this.recipeOutput.itemDamage);
+ 	}
+ 
  	public final int b() {
  		return this.width * this.height;
- 	}
++	}
 +
 +	public ItemStack[] asItemStacks() {
 +		ItemStack[] items = new ItemStack[10];
@@ -16963,7 +17255,7 @@
 +		}
 +		items[9] = this.recipeOutput;
 +		return items;
-+	}
+ 	}
  }
 --- net/minecraft/game/level/block/BlockFlowing.java
 +++ net/minecraft/game/level/block/BlockFlowing.java
@@ -17488,7 +17780,7 @@
  import net.minecraft.game.physics.Vec3D;
  
  public class Block {
-+	public static final int DROP_FLAG_SILK_TOUCH = 0b0001_0000;
++	public static final int DROP_FLAG_SILK_TOUCH = 0b1_0000_0000;
 +	public static final byte PISTON_PUSH_IMMOVABLE = 0;
 +	public static final byte PISTON_PUSH_MOVE = 1;
 +	public static final byte PISTON_PUSH_BREAK = 2;
@@ -17637,7 +17929,18 @@
  	}
  
  	public int quantityDropped(Random var1) {
-@@ -265,11 +332,11 @@
+@@ -239,6 +306,10 @@
+ 		return this.blockID;
+ 	}
+ 
++	public int damageDropped(int metadata, int dropId, Random var1) {
++		return 0;
++	}
++
+ 	public final float blockStrength(EntityPlayer var1) {
+ 		if(this.hardness < 0.0F) {
+ 			return 0.0F;
+@@ -265,21 +336,22 @@
  		}
  	}
  
@@ -17651,7 +17954,19 @@
  		int var7 = this.quantityDropped(var1.random);
  
  		for(int var8 = 0; var8 < var7; ++var8) {
-@@ -415,6 +482,41 @@
+ 			if(var1.random.nextFloat() <= var6) {
+ 				int var9 = this.idDropped(var5, var1.random);
+ 				if(var9 > 0) {
++					int var9a = this.damageDropped(var5, var9, var1.random);
+ 					float var10 = var1.random.nextFloat() * 0.7F + 0.15F;
+ 					float var11 = var1.random.nextFloat() * 0.7F + 0.15F;
+ 					float var12 = var1.random.nextFloat() * 0.7F + 0.15F;
+-					EntityItem var13 = new EntityItem(var1, (float)var2 + var10, (float)var3 + var11, (float)var4 + var12, new ItemStack(var9));
++					EntityItem var13 = new EntityItem(var1, (float)var2 + var10, (float)var3 + var11, (float)var4 + var12, new ItemStack(var9, 1, var9a));
+ 					var13.delayBeforeCanPickup = 10;
+ 					var1.spawnEntityInWorld(var13);
+ 				}
+@@ -415,6 +487,41 @@
  	public void onBlockPlaced(World var1, int var2, int var3, int var4, int var5) {
  	}
  
@@ -17693,7 +18008,7 @@
  	static {
  		Block var10000 = (new BlockStone(1, 1)).setHardness(1.5F).setResistance(10.0F);
  		StepSound var1 = soundStoneFootstep;
-@@ -450,11 +552,12 @@
+@@ -450,11 +557,12 @@
  		var1 = soundStoneFootstep;
  		var0 = var10000;
  		var0.stepSound = var1;
@@ -17710,7 +18025,7 @@
  		var10000 = (new BlockSand(12, 18)).setHardness(0.5F);
  		var1 = soundSandFootstep;
  		var0 = var10000;
-@@ -600,22 +703,22 @@
+@@ -600,22 +708,22 @@
  		var0 = var10000;
  		var0.stepSound = var1;
  		mushroomRed = (BlockFlower)var0;
@@ -17737,7 +18052,7 @@
  		var1 = soundStoneFootstep;
  		var0 = var10000;
  		var0.stepSound = var1;
-@@ -640,11 +743,12 @@
+@@ -640,11 +748,12 @@
  		var0 = var10000;
  		var0.stepSound = var1;
  		cobblestoneMossy = var0;
@@ -17751,7 +18066,7 @@
  		var10000 = (new BlockTorch(50, 80)).setHardness(0.0F).setLightValue(14.0F / 16.0F);
  		var1 = soundWoodFootstep;
  		var0 = var10000;
-@@ -670,7 +774,7 @@
+@@ -670,7 +779,7 @@
  		var0 = var10000;
  		var0.stepSound = var1;
  		crate = var0;
@@ -17760,7 +18075,7 @@
  		var1 = soundMetalFootstep;
  		var0 = var10000;
  		var0.stepSound = var1;
-@@ -680,7 +784,7 @@
+@@ -680,7 +789,7 @@
  		var0 = var10000;
  		var0.stepSound = var1;
  		oreDiamond = var0;
@@ -18448,6 +18763,15 @@
 +	}
 +
  	public void onCollideWithPlayer(EntityPlayer var1) {
+ 	}
+ 
+@@ -506,7 +543,7 @@
+ 		this.fallDistance = var1.getFloat("FallDistance");
+ 		this.fire = var1.getShort("Fire");
+ 		this.air = var1.getShort("Air");
+-		this.setPositionAndRotation(this.posX, this.posY, this.posZ, this.rotationYaw, this.rotationPitch);
++		this.setPositionAndRotation(this.posX, this.posY - this.yOffset, this.posZ, this.rotationYaw, this.rotationPitch);
+ 		this.readEntityFromNBT(var1);
  	}
  
 @@ -546,5 +583,9 @@
