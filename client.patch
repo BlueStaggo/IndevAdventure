@@ -125,7 +125,24 @@
 +}
 --- net/minecraft/client/gui/GuiLevelDialog.java
 +++ net/minecraft/client/gui/GuiLevelDialog.java
-@@ -21,10 +21,10 @@
+@@ -1,5 +1,7 @@
+ package net.minecraft.client.gui;
+ 
++import net.minecraft.client.Minecraft;
++
+ import java.awt.FileDialog;
+ import java.io.File;
+ 
+@@ -13,7 +15,7 @@
+ 	public final void run() {
+ 		try {
+ 			FileDialog var1 = this.screen.saveFileDialog();
+-			File var2 = new File(this.screen.mc.mcDataDir, "saves");
++			File var2 = new File(Minecraft.getAppDir(), "saves");
+ 			var2.mkdir();
+ 			String var5 = var2.toString();
+ 			if(!var5.endsWith(File.separator)) {
+@@ -21,10 +23,10 @@
  			}
  
  			var1.setDirectory(var5);
@@ -138,7 +155,7 @@
  			if(var1.getFile() != null) {
  				var5 = var1.getDirectory();
  				if(!var5.endsWith(File.separator)) {
-@@ -32,6 +32,8 @@
+@@ -32,6 +34,8 @@
  				}
  
  				GuiLoadLevel.a(this.screen, new File(var5 + var1.getFile()));
@@ -213,7 +230,7 @@
  }
 --- net/minecraft/client/GuiMainMenu.java
 +++ net/minecraft/client/GuiMainMenu.java
-@@ -1,17 +1,144 @@
+@@ -1,61 +1,178 @@
  package net.minecraft.client;
  
 -import net.minecraft.client.gui.GuiButton;
@@ -221,15 +238,22 @@
 -import net.minecraft.client.gui.GuiNewLevel;
 -import net.minecraft.client.gui.GuiOptions;
 -import net.minecraft.client.gui.GuiScreen;
++import com.mojang.nbt.NBTBase;
++import com.mojang.nbt.NBTTagCompound;
 +import net.minecraft.client.gui.*;
  import net.minecraft.client.render.Tessellator;
-+import net.minecraft.game.level.World;
++import net.minecraft.game.level.generator.LevelStructure;
++import net.minecraft.game.level.generator.LevelTheme;
++import net.minecraft.game.level.generator.LevelType;
  import org.lwjgl.opengl.GL11;
  import util.MathHelper;
  
-+import java.io.File;
-+import java.io.FileInputStream;
-+import java.io.IOException;
++import java.io.*;
++import java.nio.file.Files;
++import java.util.Arrays;
++import java.util.Objects;
++import java.util.function.Function;
++import java.util.zip.GZIPInputStream;
 +
  public final class GuiMainMenu extends GuiScreen {
  	private float updateCounter = 0.0F;
@@ -364,7 +388,11 @@
  	private String currentSplash = this.splashes[(int)(Math.random() * (double)this.splashes.length)];
  
  	public final void updateScreen() {
-@@ -22,16 +149,10 @@
+ 		this.updateCounter += 0.01F;
++		((GuiButton)this.controlList.get(3)).enabled = !ThreadSaveLevel.isBusy();
+ 	}
+ 
+ 	protected final void keyTyped(char var1, int var2) {
  	}
  
  	public final void initGui() {
@@ -372,39 +400,31 @@
 -		this.controlList.add(new GuiButton(1, this.width / 2 - 100, this.height / 4 + 48, "Generate new level..."));
 -		this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 72, "Load level.."));
 -		this.controlList.add(new GuiButton(3, this.width / 2 - 100, this.height / 4 + 96, "Play tutorial level"));
- 		this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 4 + 120 + 12, "Options..."));
+-		this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 4 + 120 + 12, "Options..."));
 -		((GuiButton)this.controlList.get(2)).enabled = false;
 -		if(this.mc.session == null) {
 -			((GuiButton)this.controlList.get(1)).enabled = false;
 -		}
 -
-+		this.controlList.add(new GuiButton(1, this.width / 2 - 100, this.height / 4 + 48, "Play world..."));
-+		this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 72, "Generate new level..."));
-+		this.controlList.add(new GuiButton(3, this.width / 2 - 100, this.height / 4 + 96, "Load level..."));
- 	}
- 
- 	protected final void actionPerformed(GuiButton var1) {
-@@ -39,23 +160,31 @@
- 			this.mc.displayGuiScreen(new GuiOptions(this, this.mc.options));
- 		}
- 
+-	}
+-
+-	protected final void actionPerformed(GuiButton var1) {
+-		if(var1.id == 0) {
+-			this.mc.displayGuiScreen(new GuiOptions(this, this.mc.options));
+-		}
+-
 -		if(var1.id == 1) {
-+		if (var1.id == 1) {
-+			this.mc.displayGuiScreen(new GuiTextPrompt(this, "Enter world name", this.mc::loadWorld));
-+		}
-+
-+		if(var1.id == 2) {
-+			this.mc.adventureMode = false;
- 			this.mc.displayGuiScreen(new GuiNewLevel(this));
- 		}
- 
+-			this.mc.displayGuiScreen(new GuiNewLevel(this));
+-		}
+-
 -		if(this.mc.session != null && var1.id == 2) {
 -			this.mc.displayGuiScreen(new GuiLoadLevel(this));
-+		if(var1.id == 3) {
-+			this.mc.adventureMode = false;
-+			this.mc.displayGuiScreen(new GuiTextPrompt(this, "Enter level name", this.mc::loadLevel));
- 		}
+-		}
 -
++		this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 4 + 96, "Options..."));
++		this.controlList.add(new GuiButton(1, this.width / 2 - 100, this.height / 4 + 48, "Play world..."));
++		this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 72, "Play level..."));
++		this.controlList.add(new GuiButton(3, this.width / 2 - 100, this.height / 4 + 132, "Quit game"));
  	}
  
  	public final void drawScreen(int var1, int var2, float var3) {
@@ -420,7 +440,7 @@
  		GL11.glPushMatrix();
  		GL11.glTranslatef((float)(this.width / 2 + 90), 70.0F, 0.0F);
  		GL11.glRotatef(-20.0F, 0.0F, 0.0F, 1.0F);
-@@ -65,15 +194,25 @@
+@@ -65,15 +182,141 @@
  		drawCenteredString(this.fontRenderer, this.currentSplash, 0, -8, 16776960);
  		GL11.glPopMatrix();
  		String var16 = "Copyright Mojang Specifications. Do not distribute.";
@@ -447,35 +467,157 @@
 +			this.fontRenderer.alpha = 1.0F;
 +			GL11.glDisable(GL11.GL_BLEND);
 +		}
++	}
++
++	protected final void actionPerformed(GuiButton var1) {
++		if (var1.id == 0) {
++			this.mc.displayGuiScreen(new GuiOptions(this, this.mc.options));
++		}
++
++		if (var1.id == 1) {
++			this.mc.adventureMode = true;
++			GuiFileSelection fileSelection = new GuiFileSelection(
++					this, new File(Minecraft.getAppDir(), "inadv-worlds"), "Select world", GuiMainMenu::worldInfoProvider);
++			fileSelection
++					.filenameFilter((file, name) -> new File(file, name).isDirectory())
++					.callbackExisting(file -> {
++						this.mc.adventureMode = true;
++						this.mc.worldSaveLocation = file;
++						try {
++							this.mc.loadWorld();
++							this.mc.displayGuiScreen(null);
++						} catch (IOException e) {
++							e.printStackTrace();
++							this.mc.adventureMode = false;
++						}
++					})
++					.callbackNonExisting(this.mc::loadWorld)
++					.callbackDeletion(file -> {
++						this.mc.adventureMode = true;
++						this.mc.worldSaveLocation = file;
++						this.mc.displayGuiScreen(new GuiDeleteWorld(fileSelection));
++					})
++					.inputValidifier(s -> !s.isEmpty() && s.chars().allMatch(c -> Minecraft.VALID_PATH_CHARACTERS.contains((char)c)))
++					.nonExistingTitle("Enter world name");
++			this.mc.displayGuiScreen(fileSelection);
++		}
++
++		if (var1.id == 2) {
++			this.mc.adventureMode = false;
++			GuiFileSelection fileSelection = new GuiFileSelection(
++					this, new File(Minecraft.getAppDir(), "inadv-levels"), "Select level", GuiMainMenu::levelInfoProvider);
++			fileSelection
++					.filenameFilter((file, name) -> new File(file, name).isFile() && name.endsWith(".mclevel"))
++					.callbackExisting(this.mc::loadLevel)
++					.callbackNonExisting(this.mc::loadLevel)
++					.callbackDeletion(file -> {
++						this.mc.adventureMode = false;
++						this.mc.worldSaveLocation = file;
++						this.mc.displayGuiScreen(new GuiDeleteWorld(fileSelection));
++					})
++					.inputValidifier(s -> s.chars().allMatch(c -> Minecraft.VALID_PATH_CHARACTERS.contains((char)c)))
++					.nonExistingTitle("Enter level name (empty for no saving)");
++			this.mc.displayGuiScreen(fileSelection);
++		}
++
++		if (var1.id == 3) {
++			this.mc.shutdown();
++		}
++	}
++
++	private static GuiFileSelection.FileInfo levelInfoProvider(File file) {
++		NBTBase data;
++		try (InputStream levelStream = Files.newInputStream(file.toPath());
++			 DataInputStream dataStream = new DataInputStream(new GZIPInputStream(levelStream))) {
++			data = NBTBase.readTag(dataStream);
++		} catch (IOException e) {
++			return null;
++		}
++		if (!(data instanceof NBTTagCompound)) return null;
++
++		NBTTagCompound about = ((NBTTagCompound) data).getCompoundTag("About");
++		NBTTagCompound map = ((NBTTagCompound) data).getCompoundTag("Map");
++		NBTTagCompound environment = ((NBTTagCompound) data).getCompoundTag("Environment");
++		if (about == null || map == null || environment == null) return null;
++
++		return new GuiFileSelection.FileInfo(
++				LevelType.fromName(environment.getString("LevelType")),
++				LevelTheme.fromName(environment.getString("LevelTheme")),
++				LevelStructure.fromName(environment.getString("LevelStructure")),
++				map.getShort("Width"),
++				map.getShort("Height"),
++				map.getShort("Length"),
++				about.getBoolean("Creative"),
++				file.lastModified(),
++				file.length()
++		);
++	}
++
++	private static GuiFileSelection.FileInfo worldInfoProvider(File file) {
++		if (!file.isDirectory()) return null;
++
++		File dataFile = new File(file, "player.dat");
++		if (!dataFile.isFile()) return null;
++
++		NBTBase playerData;
++		try (InputStream playerStream = Files.newInputStream(dataFile.toPath());
++			 DataInputStream dataStream = new DataInputStream(new GZIPInputStream(playerStream))) {
++			playerData = NBTBase.readTag(dataStream);
++		} catch (IOException e) {
++			return null;
++		}
++
++		if (!(playerData instanceof NBTTagCompound)) return null;
++		NBTTagCompound worldInfoTag = ((NBTTagCompound) playerData).getCompoundTag("WorldInfo");
++		if (worldInfoTag == null) return null;
++
++		long fileSize = Arrays.stream(Objects.requireNonNull(file.listFiles())).mapToLong(File::length).sum();
++        return new GuiFileSelection.FileInfo(
++				LevelType.fromName(worldInfoTag.getString("CurrentLevelType")),
++				LevelTheme.fromName(worldInfoTag.getString("CurrentLevelTheme")),
++				LevelStructure.fromName(worldInfoTag.getString("CurrentLevelStructure")),
++				worldInfoTag.getInteger("LevelWidth"),
++				worldInfoTag.getInteger("LevelHeight"),
++				worldInfoTag.getInteger("LevelLength"),
++				worldInfoTag.getBoolean("Creative"),
++				dataFile.lastModified(),
++				fileSize
++		);
  	}
  }
 --- /dev/null
 +++ net/minecraft/client/gui/GuiTextPrompt.java
-@@ -1,0 +1,69 @@
+@@ -1,0 +1,76 @@
 +package net.minecraft.client.gui;
 +
 +import org.lwjgl.opengl.GL11;
 +
-+import java.util.HashSet;
-+import java.util.Set;
 +import java.util.function.Consumer;
++import java.util.function.Predicate;
 +
 +public class GuiTextPrompt extends GuiScreen {
 +    private final GuiScreen parent;
 +    private final String prompt;
 +    private final Consumer<String> consumer;
++    private final Predicate<String> validifier;
 +    private String text = "";
 +    private int updateCounter;
 +
 +    public GuiTextPrompt(GuiScreen parent, String prompt, Consumer<String> consumer) {
++        this(parent, prompt, consumer, null);
++    }
++
++    public GuiTextPrompt(GuiScreen parent, String prompt, Consumer<String> consumer, Predicate<String> validifier) {
 +        this.parent = parent;
 +        this.prompt = prompt;
 +        this.consumer = consumer;
++        this.validifier = validifier;
 +    }
 +
 +    public void initGui() {
 +        this.controlList.add(new GuiButton(0, this.width / 2 - 105, this.height / 2 + 15, 100, 20, "OK"));
 +        this.controlList.add(new GuiButton(1, this.width / 2 + 5, this.height / 2 + 15, 100, 20, "Cancel"));
++        ((GuiButton)this.controlList.get(0)).enabled = this.validifier == null || this.validifier.test(this.text);
 +    }
 +
 +    public void drawScreen(int var1, int var2, float var3) {
@@ -512,6 +654,7 @@
 +        } else if (var1 >= 32 && var1 < 128) { // Only ASCII characters allowed
 +            this.text += var1;
 +        }
++        ((GuiButton)this.controlList.get(0)).enabled = this.validifier == null || this.validifier.test(this.text);
 +    }
 +
 +    protected void actionPerformed(GuiButton var1) {
@@ -523,19 +666,20 @@
 +}
 --- /dev/null
 +++ net/minecraft/client/gui/GuiSliderGeneric.java
-@@ -1,0 +1,133 @@
+@@ -1,0 +1,151 @@
 +package net.minecraft.client.gui;
 +
 +import net.minecraft.client.Minecraft;
 +
 +import org.lwjgl.opengl.GL11;
 +
++import java.util.function.Consumer;
 +import java.util.function.Function;
 +import java.util.function.UnaryOperator;
 +
 +public class GuiSliderGeneric extends GuiButton {
 +	public final String label;
-+	public float multiplier;
++	public float multiplier = 1.0F;
 +	public float sliderValue;
 +	public boolean round;
 +	public boolean dragging;
@@ -545,13 +689,19 @@
 +			+ (s.round ? Integer.toString((int)s.getValue()) : Float.toString(s.getValue()))
 +			+ (s.multiplier == 1.0F || !s.showMultiplier ? "" : " / "
 +			+ (s.round ? Integer.toString((int)s.multiplier) : Float.toString(s.multiplier)));
++	private final Consumer<Float> callback;
 +
 +	public GuiSliderGeneric(int id, int x, int y, int w, int h, String label) {
++		this(id, x, y, w, h, label, f -> {});
++	}
++
++	public GuiSliderGeneric(int id, int x, int y, int w, int h, String label, Consumer<Float> callback) {
 +		super(id, x, y, w, h, label);
 +		this.width = w;
 +		this.height = h;
 +		this.label = label;
 +		this.displayString = this.getDisplayString();
++		this.callback = callback;
 +	}
 +
 +	protected byte getHoverState(boolean var1) {
@@ -579,17 +729,23 @@
 +	}
 +
 +	protected void mouseDragged(Minecraft var1, int var2, int var3) {
-+		if(this.visible) {
-+			if(this.dragging) {
++		if (this.visible) {
++			if (this.dragging) {
++				float prevValue = this.sliderValue;
++
 +				this.sliderValue = this.vertical
 +						? (float)(var3 - (this.yPosition + 4)) / (float)(this.height - 8)
 +						: (float)(var2 - (this.xPosition + 4)) / (float)(this.width - 8);
-+				if(this.sliderValue < 0.0F) {
++				if (this.sliderValue < 0.0F) {
 +					this.sliderValue = 0.0F;
 +				}
 +
-+				if(this.sliderValue > 1.0F) {
++				if (this.sliderValue > 1.0F) {
 +					this.sliderValue = 1.0F;
++				}
++
++				if (this.sliderValue != prevValue) {
++					this.callback.accept(this.getValue());
 +				}
 +
 +				this.displayString = this.getDisplayString();
@@ -608,19 +764,20 @@
 +	}
 +
 +	public boolean mousePressed(int var1, int var2) {
-+		if(super.mousePressed(var1, var2)) {
++		if (super.mousePressed(var1, var2)) {
 +			this.sliderValue = this.vertical
 +					? (float)(var1 - (this.yPosition + 4)) / (float)(this.height - 8)
 +					: (float)(var1 - (this.xPosition + 4)) / (float)(this.width - 8);
 +
-+			if(this.sliderValue < 0.0F) {
++			if (this.sliderValue < 0.0F) {
 +				this.sliderValue = 0.0F;
 +			}
 +
-+			if(this.sliderValue > 1.0F) {
++			if (this.sliderValue > 1.0F) {
 +				this.sliderValue = 1.0F;
 +			}
 +
++			this.callback.accept(this.getValue());
 +			this.dragging = true;
 +			return true;
 +		} else {
@@ -637,12 +794,16 @@
 +
 +		this.sliderValue -= delta / 120.0F / this.multiplier;
 +
-+		if(this.sliderValue < 0.0F) {
++		if (this.sliderValue < 0.0F) {
 +			this.sliderValue = 0.0F;
 +		}
 +
-+		if(this.sliderValue > 1.0F) {
++		if (this.sliderValue > 1.0F) {
 +			this.sliderValue = 1.0F;
++		}
++
++		if (delta != 0.0F) {
++			this.callback.accept(this.getValue());
 +		}
 +	}
 +
@@ -2151,7 +2312,8 @@
  		this.setBlockBounds(0.3F, 0.0F, 0.3F, 0.7F, 0.4F, 0.7F);
  	}
  
- 	protected final boolean canThisPlantGrowOnThisBlockID(int var1) {
+-	protected final boolean canThisPlantGrowOnThisBlockID(int var1) {
++	public final boolean canThisPlantGrowOnThisBlockID(int var1) {
  		return Block.opaqueCubeLookup[var1];
 +	}
 +
@@ -2215,7 +2377,7 @@
 +}
 --- net/minecraft/game/level/block/BlockSand.java
 +++ net/minecraft/game/level/block/BlockSand.java
-@@ -1,60 +1,151 @@
+@@ -1,60 +1,154 @@
  package net.minecraft.game.level.block;
  
 +import java.util.List;
@@ -2341,8 +2503,8 @@
 -			--var5;
 -			if(var1.getBlockId(var2, var5, var4) == Block.fire.blockID) {
 -				var1.setBlock(var2, var5, var4, 0);
-+			AxisAlignedBB aabb = this.getCollisionBoundingBoxFromPool(var1, var2, var3 + 1, var4).expand(-0.01F, 0.0F, -0.01F);
-+			aabb.minY -= 1.0F;
++			AxisAlignedBB aabb = this.getCollisionBoundingBoxFromPool(var1, var2, var3, var4).getOffsetBoundingBox(0.0F, 0.99F, 0.0F).expand(-0.01F, 0.0F, -0.01F);
++			float snapY = dirSign == -1 ? aabb.minY - 0.99F : aabb.maxY + 0.01F;
 +			var3 += dirSign;
 +			Block blockBelow = Block.blocksList[var1.getBlockId(var2, var3, var4)];
 +			if (blockBelow != null && (blockBelow.getCollisionBoundingBoxFromPool(var1, var2, var3, var4) != null
@@ -2386,9 +2548,12 @@
 +			for (Object object : ridingEntities) {
 +				Entity entity = (Entity)object;
 +				if (dirSign != -1 && !entity.onGround) continue;
-+				entity.boundingBox.minY = (dirSign == -1 ? aabb.minY : aabb.maxY);
++				entity.boundingBox.minY = snapY;
 +				entity.boundingBox.maxY = entity.boundingBox.minY + entity.height;
 +				entity.posY = entity.boundingBox.minY + entity.yOffset;
++				if (entity.isSneaking()) {
++					entity.posY -= 0.2F;
++				}
 +				entity.lastTickPosY = entity.prevPosY = entity.posY;
 +				entity.onGround = true;
  			}
@@ -2405,6 +2570,16 @@
 +		return true;
  	}
  }
+--- net/minecraft/game/item/ItemPainting.java
++++ net/minecraft/game/item/ItemPainting.java
+@@ -6,7 +6,6 @@
+ public final class ItemPainting extends Item {
+ 	public ItemPainting(int var1) {
+ 		super(65);
+-		this.maxDamage = 64;
+ 	}
+ 
+ 	public final boolean onItemUse(ItemStack var1, World var2, int var3, int var4, int var5, int var6) {
 --- /dev/null
 +++ util/IntArray2D.java
 @@ -1,0 +1,40 @@
@@ -2909,6 +3084,40 @@
 +		});
 +	}
 +}
+--- net/minecraft/client/gui/GuiOptions.java
++++ net/minecraft/client/gui/GuiOptions.java
+@@ -14,7 +14,21 @@
+ 
+ 	public final void initGui() {
+ 		for(int var1 = 0; var1 < this.options.numberOfOptions; ++var1) {
+-			this.controlList.add(new GuiSmallButton(var1, this.width / 2 - 155 + var1 % 2 * 160, this.height / 6 + 24 * (var1 >> 1), this.options.setOptionString(var1)));
++			final int id = var1;
++			int x = this.width / 2 - 155 + var1 % 2 * 160;
++			int y = this.height / 6 + 24 * (var1 >> 1);
++			if (this.options.isSlider(var1)) {
++				GuiSliderGeneric slider = new GuiSliderGeneric(
++						var1, x, y, 150, 20, this.options.setOptionString(var1),
++						f -> this.options.setOptionFloat(id, f)
++				);
++				slider.sliderValue = this.options.getOptionFloat(id);
++				slider.formatter = s -> this.options.setOptionString(id);
++				slider.updateText();
++				this.controlList.add(slider);
++			} else {
++				this.controlList.add(new GuiSmallButton(var1, x, y, this.options.setOptionString(var1)));
++			}
+ 		}
+ 
+ 		this.controlList.add(new GuiButton(100, this.width / 2 - 100, this.height / 6 + 120 + 12, "Controls..."));
+@@ -23,7 +37,7 @@
+ 
+ 	protected final void actionPerformed(GuiButton var1) {
+ 		if(var1.enabled) {
+-			if(var1.id < 100) {
++			if(var1.id < 100 && !(var1 instanceof GuiSliderGeneric)) {
+ 				this.options.setOptionValue(var1.id, 1);
+ 				var1.displayString = this.options.setOptionString(var1.id);
+ 			}
 --- /dev/null
 +++ net/minecraft/game/level/generator/terrain/StageGrowing.java
 @@ -1,0 +1,91 @@
@@ -3140,26 +3349,108 @@
  
 --- net/minecraft/client/render/RenderEngine.java
 +++ net/minecraft/client/render/RenderEngine.java
-@@ -26,6 +26,7 @@
+@@ -1,9 +1,10 @@
+ package net.minecraft.client.render;
+ 
+-import java.awt.Graphics;
++import java.awt.*;
+ import java.awt.image.BufferedImage;
+ import java.awt.image.ImageObserver;
+ import java.io.IOException;
++import java.io.InputStream;
+ import java.nio.ByteBuffer;
+ import java.nio.IntBuffer;
+ import java.util.ArrayList;
+@@ -26,9 +27,18 @@
  	private Map urlToImageDataMap = new HashMap();
  	private GameSettings options;
  	private boolean clampTexture = false;
 +	private boolean bilinearTexture = false;
++	private BufferedImage missingTextureImage = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
  
  	public RenderEngine(GameSettings var1) {
  		this.options = var1;
-@@ -46,6 +47,10 @@
- 					this.clampTexture = true;
- 					this.setupTexture(ImageIO.read(RenderEngine.class.getResourceAsStream(var1.substring(2))), var4);
- 					this.clampTexture = false;
-+				} else if(var1.startsWith("$$")) {
-+					this.bilinearTexture = true;
-+					this.setupTexture(ImageIO.read(RenderEngine.class.getResourceAsStream(var1.substring(2))), var4);
-+					this.bilinearTexture = false;
- 				} else {
- 					this.setupTexture(ImageIO.read(RenderEngine.class.getResourceAsStream(var1)), var4);
- 				}
-@@ -73,8 +78,13 @@
++		Graphics var3 = this.missingTextureImage.getGraphics();
++		var3.setColor(Color.black);
++		var3.fillRect(0, 0, 16, 16);
++		var3.setColor(Color.magenta);
++		var3.fillRect(0, 8, 8, 8);
++		var3.fillRect(8, 0, 8, 8);
++		var3.dispose();
+ 	}
+ 
+ 	public final int getTexture(String var1) {
+@@ -39,21 +49,55 @@
+ 			try {
+ 				this.singleIntBuffer.clear();
+ 				GL11.glGenTextures(this.singleIntBuffer);
+-				int var4 = this.singleIntBuffer.get(0);
+-				if(var1.startsWith("##")) {
+-					this.setupTexture(unwrapImageByColumns(ImageIO.read(RenderEngine.class.getResourceAsStream(var1.substring(2)))), var4);
+-				} else if(var1.startsWith("%%")) {
+-					this.clampTexture = true;
+-					this.setupTexture(ImageIO.read(RenderEngine.class.getResourceAsStream(var1.substring(2))), var4);
+-					this.clampTexture = false;
+-				} else {
+-					this.setupTexture(ImageIO.read(RenderEngine.class.getResourceAsStream(var1)), var4);
+-				}
+-
+-				this.textureMap.put(var1, Integer.valueOf(var4));
+-				return var4;
++				int textureId = this.singleIntBuffer.get(0);
++
++				int mode = var1.startsWith("##") ? 1
++						: var1.startsWith("%%") ? 2
++						: var1.startsWith("$$") ? 3
++						: 0;
++				String path = var1;
++				if (mode != 0) {
++					path = path.substring(2);
++				}
++
++				BufferedImage image = this.missingTextureImage;
++				try (InputStream stream = RenderEngine.class.getResourceAsStream(path)) {
++					if (stream != null) {
++						BufferedImage newImage = ImageIO.read(stream);
++						if (newImage != null) {
++							image = newImage;
++						}
++					}
++				}
++
++                switch (mode) {
++                    case 1:
++                        this.setupTexture(unwrapImageByColumns(image), textureId);
++                        break;
++                    case 2:
++                        this.clampTexture = true;
++                        this.setupTexture(image, textureId);
++                        this.clampTexture = false;
++                        break;
++                    case 3:
++                        this.bilinearTexture = true;
++                        this.setupTexture(image, textureId);
++                        this.bilinearTexture = false;
++                        break;
++                    default:
++                        this.setupTexture(image, textureId);
++                        break;
++                }
++
++				this.textureMap.put(var1, textureId);
++				return textureId;
+ 			} catch (IOException var3) {
+-				throw new RuntimeException("!!");
++				var3.printStackTrace();
++				GL11.glGenTextures(this.singleIntBuffer);
++				int textureId = this.singleIntBuffer.get(0);
++				this.setupTexture(this.missingTextureImage, textureId);
++				this.textureMap.put(var1, textureId);
++				return textureId;
+ 			}
+ 		}
+ 	}
+@@ -73,8 +117,13 @@
  
  	private void setupTexture(BufferedImage var1, int var2) {
  		GL11.glBindTexture(GL11.GL_TEXTURE_2D, var2);
@@ -3234,7 +3525,7 @@
  		}
  	}
  
-@@ -97,15 +113,55 @@
+@@ -97,19 +113,63 @@
  			GL11.glDisable(GL11.GL_LIGHTING);
  			GL11.glDisable(GL11.GL_FOG);
  			Tessellator var2 = Tessellator.instance;
@@ -3296,6 +3587,14 @@
  		}
  	}
  
+ 	public boolean doesGuiPauseGame() {
+ 		return true;
++	}
++
++	protected final boolean hasSelectedButton() {
++		return this.selectedButton != null;
+ 	}
+ }
 --- net/minecraft/game/level/block/BlockStep.java
 +++ net/minecraft/game/level/block/BlockStep.java
 @@ -7,10 +7,10 @@
@@ -4210,25 +4509,28 @@
  	public EntityItem(World var1) {
 --- net/minecraft/game/level/block/BlockStationary.java
 +++ net/minecraft/game/level/block/BlockStationary.java
-@@ -1,57 +1,23 @@
+@@ -1,58 +1,51 @@
  package net.minecraft.game.level.block;
  
 -import java.util.Random;
  import net.minecraft.game.level.World;
  import net.minecraft.game.level.material.Material;
  
++import java.util.Random;
++
  public final class BlockStationary extends BlockFluid {
 -	protected BlockStationary(int var1, Material var2) {
 +	public BlockStationary(int var1, Material var2) {
  		super(var1, var2);
  		this.movingId = var1 - 1;
  		this.stillId = var1;
- 		this.setTickOnLoad(false);
- 	}
- 
--	public final void updateTick(World var1, int var2, int var3, int var4, Random var5) {
+-		this.setTickOnLoad(false);
 -	}
 -
+-	public final void updateTick(World var1, int var2, int var3, int var4, Random var5) {
++		this.setTickOnLoad(var2 == Material.lava);
+ 	}
+ 
  	public final void onNeighborBlockChange(World var1, int var2, int var3, int var4, int var5) {
 -		boolean var6 = false;
 -		if(this.canFlow(var1, var2, var3 - 1, var4)) {
@@ -4256,8 +4558,39 @@
 -			if(this.material == Material.water && var7 == Material.lava || var7 == Material.water && this.material == Material.lava) {
 -				var1.setBlockWithNotify(var2, var3, var4, Block.stone.blockID);
 -				return;
--			}
--		}
++		super.onNeighborBlockChange(var1, var2, var3, var4, var5);
++		if(var1.getBlockId(var2, var3, var4) == this.blockID) {
++			int var6 = var1.getBlockMetadata(var2, var3, var4);
++			var1.setBlockAndMetadata(var2, var3, var4, this.blockID - 1, var6);
++			var1.markBlocksDirty(var2, var3, var4, var2, var3, var4);
++			var1.scheduleBlockUpdate(var2, var3, var4, this.blockID - 1);
++		}
++	}
++
++	public void updateTick(World var1, int var2, int var3, int var4, Random var5) {
++		if(this.material == Material.lava) {
++			int var6 = var5.nextInt(3);
++
++			for(int var7 = 0; var7 < var6; ++var7) {
++				var2 += var5.nextInt(3) - 1;
++				++var3;
++				var4 += var5.nextInt(3) - 1;
++				int var8 = var1.getBlockId(var2, var3, var4);
++				if(var8 == 0) {
++					if(Block.fire.canBlockCatchFire(var1, var2 - 1, var3, var4)
++							|| Block.fire.canBlockCatchFire(var1, var2 + 1, var3, var4)
++							|| Block.fire.canBlockCatchFire(var1, var2, var3, var4 - 1)
++							|| Block.fire.canBlockCatchFire(var1, var2, var3, var4 + 1)
++							|| Block.fire.canBlockCatchFire(var1, var2, var3 - 1, var4)
++							|| Block.fire.canBlockCatchFire(var1, var2, var3 + 1, var4)) {
++						var1.setBlockWithNotify(var2, var3, var4, Block.fire.blockID);
++						return;
++					}
++				} else if(Block.blocksList[var8].material.getIsSolid()) {
++					return;
++				}
+ 			}
+ 		}
 -
 -		if(Block.fire.getChanceOfNeighborsEncouragingFire(var5)) {
 -			var6 = true;
@@ -4266,15 +4599,10 @@
 -		if(var6) {
 -			var1.setTileNoUpdate(var2, var3, var4, this.movingId);
 -			var1.scheduleBlockUpdate(var2, var3, var4, this.movingId);
-+		super.onNeighborBlockChange(var1, var2, var3, var4, var5);
-+		if(var1.getBlockId(var2, var3, var4) == this.blockID) {
-+			int var6 = var1.getBlockMetadata(var2, var3, var4);
-+			var1.setBlockAndMetadata(var2, var3, var4, this.blockID - 1, var6);
-+			var1.markBlocksDirty(var2, var3, var4, var2, var3, var4);
-+			var1.scheduleBlockUpdate(var2, var3, var4, this.blockID - 1);
- 		}
- 
+-		}
+-
  	}
+ }
 --- /dev/null
 +++ net/minecraft/game/level/block/BlockMushroomCap.java
 @@ -1,0 +1,50 @@
@@ -5326,10 +5654,9 @@
 +}
 --- /dev/null
 +++ net/minecraft/game/item/ItemDoor.java
-@@ -1,0 +1,81 @@
+@@ -1,0 +1,78 @@
 +package net.minecraft.game.item;
 +
-+import net.minecraft.game.entity.player.EntityPlayer;
 +import net.minecraft.game.level.World;
 +import net.minecraft.game.level.block.Block;
 +import net.minecraft.game.level.material.Material;
@@ -5341,8 +5668,6 @@
 +    public ItemDoor(int var1, Material var2) {
 +        super(var1);
 +        this.material = var2;
-+        this.maxDamage = 64;
-+        this.maxStackSize = 1;
 +    }
 +
 +    public boolean onItemUse(ItemStack var1, World var3, int var4, int var5, int var6, int var7) {
@@ -5587,7 +5912,19 @@
  }
 --- net/minecraft/client/gui/Gui.java
 +++ net/minecraft/client/gui/Gui.java
-@@ -62,12 +62,17 @@
+@@ -1,6 +1,11 @@
+ package net.minecraft.client.gui;
+ 
++import net.minecraft.client.Minecraft;
++import net.minecraft.client.render.RenderEngine;
+ import net.minecraft.client.render.Tessellator;
++import net.minecraft.client.render.entity.RenderItem;
++import net.minecraft.game.item.ItemStack;
++import net.minecraft.game.level.block.Block;
+ import org.lwjgl.opengl.GL11;
+ 
+ public class Gui {
+@@ -62,12 +67,31 @@
  	}
  
  	public final void drawTexturedModalRect(int var1, int var2, int var3, int var4, int var5, int var6) {
@@ -5610,6 +5947,20 @@
 +		t.addVertexWithUV((float)(var1 + var5), (float)var2, this.zLevel, (float)(var3 + var5) * s, (float)var4 * s);
 +		t.addVertexWithUV((float)var1, (float)var2, this.zLevel, (float)var3 * s, (float)var4 * s);
 +		t.draw();
++	}
++
++	public final void drawAutosaveIcon(Minecraft mc, int x, int y) {
++		this.zLevel += 100.0F;
++
++		int time = (int)Math.floorMod(System.currentTimeMillis() / 125, 8);
++		int arrowY = y - 20 + (time < 4 ? -time : time - 8);
++
++		GL11.glBindTexture(GL11.GL_TEXTURE_2D, mc.renderEngine.getTexture("/gui/autosave-chest.png"));
++		this.drawTexturedModalRect(x - 8, y - 8, 0, 0, 16, 16, 16);
++		GL11.glBindTexture(GL11.GL_TEXTURE_2D, mc.renderEngine.getTexture("/gui/autosave-arrow.png"));
++		this.drawTexturedModalRect(x - 8, arrowY, 0, 0, 16, 16, 16);
++
++		this.zLevel -= 100.0F;
  	}
  }
 --- net/minecraft/game/item/ItemBlock.java
@@ -5878,8 +6229,10 @@
  
 --- /dev/null
 +++ net/minecraft/client/gui/GuiLoadWorld.java
-@@ -1,0 +1,94 @@
+@@ -1,0 +1,96 @@
 +package net.minecraft.client.gui;
++
++import net.minecraft.client.Minecraft;
 +
 +import java.io.File;
 +import java.io.IOException;
@@ -5914,9 +6267,9 @@
 +	}
 +
 +	private void createNewWorld() {
-+		File[] files = this.mc.worldDir.listFiles();
-+		if (this.mc.worldDir.isFile() || files != null && files.length != 0) {
-+			this.mc.worldDir = null;
++		File[] files = this.mc.worldSaveLocation.listFiles();
++		if (this.mc.worldSaveLocation.isFile() || files != null && files.length != 0) {
++			this.mc.worldSaveLocation = null;
 +			return;
 +		}
 +
@@ -5933,7 +6286,7 @@
 +		} catch (IOException e) {
 +			e.printStackTrace();
 +			this.mc.adventureMode = false;
-+			this.mc.worldDir = null;
++			this.mc.worldSaveLocation = null;
 +		}
 +	}
 +
@@ -5950,8 +6303,8 @@
 +				}
 +			}
 +
-+			File savesDir = new File(this.mc.mcDataDir, "inadv-worlds");
-+			this.mc.worldDir = new File(savesDir, path);
++			File savesDir = new File(Minecraft.getAppDir(), "inadv-worlds");
++			this.mc.worldSaveLocation = new File(savesDir, path);
 +			action.run();
 +		};
 +	}
@@ -5975,7 +6328,7 @@
 +}
 --- /dev/null
 +++ net/minecraft/client/gui/GuiSelectBlock.java
-@@ -1,0 +1,190 @@
+@@ -1,0 +1,205 @@
 +package net.minecraft.client.gui;
 +
 +import net.minecraft.client.ItemTooltips;
@@ -5993,7 +6346,7 @@
 +import org.lwjgl.opengl.GL12;
 +
 +public class GuiSelectBlock extends GuiScreen {
-+	private static final RenderItem itemRenderer = new RenderItem();
++	private static final RenderItem itemRenderer = RenderItem.instance;
 +	private int page = 0;
 +
 +	public void initGui() {
@@ -6003,6 +6356,9 @@
 +			this.controlList.add(new GuiButton(2, 8, this.height - 52, 60, 20, "Afternoon").withBg(1));
 +			this.controlList.add(new GuiButton(3, 8, this.height - 28, 60, 20, "Night").withBg(1));
 +		}
++
++		this.controlList.add(new GuiButton(4, this.width / 2 + 130, this.height / 2 - 10, 20, 20, "v").withBg(1));
++		this.controlList.add(new GuiButton(5, this.width / 2 + 130, this.height / 2 - 40, 20, 20, "^").withBg(1));
 +	}
 +
 +	public boolean doesGuiPauseGame() {
@@ -6096,6 +6452,7 @@
 +		GL11.glDisable(GL11.GL_DEPTH_TEST);
 +		GL11.glPopMatrix();
 +		super.drawScreen(var1, var2, var3);
++
 +		if (this.mc.options.showFPS) {
 +			drawCenteredString(this.fontRenderer, "Change time", 38, this.height - 116, 0xFFFFFF);
 +		}
@@ -6103,6 +6460,8 @@
 +
 +	protected void drawSlotInventory(int var1, int var2, int var3) {
 +		super.drawSlotInventory(var1, var2, var3);
++
++		if (this.hasSelectedButton()) return;
 +
 +		if (var3 == 0) {
 +			int tile = this.getTileAtSlot(var1, var2);
@@ -6141,8 +6500,17 @@
 +	}
 +
 +	protected void actionPerformed(GuiButton var1) {
-+		if (var1.id < 4) {
++		if (var1.id >= 0 && var1.id < 4) {
 +			this.mc.theWorld.worldTime = var1.id * 4500 - 1000;
++		} else {
++			switch (var1.id) {
++				case 4:
++					this.mouseScrolled(-120);
++					break;
++				case 5:
++					this.mouseScrolled(120);
++					break;
++			}
 +		}
 +	}
 +
@@ -6183,11 +6551,13 @@
  import net.minecraft.client.player.EntityPlayerSP;
  import net.minecraft.client.render.entity.RenderItem;
  import net.minecraft.game.entity.player.InventoryPlayer;
-@@ -14,7 +17,7 @@
+@@ -13,8 +16,8 @@
+ import org.lwjgl.opengl.GL11;
  
  public final class GuiIngame extends Gui {
- 	private static RenderItem itemRenderer = new RenderItem();
+-	private static RenderItem itemRenderer = new RenderItem();
 -	private List chatMessageList = new ArrayList();
++	private static RenderItem itemRenderer = RenderItem.instance;
 +	private List chatMessageList = Collections.synchronizedList(new ArrayList());
  	private Random rand = new Random();
  	private Minecraft mc;
@@ -6234,7 +6604,7 @@
  			Minecraft var23 = this.mc;
  			var4.drawStringWithShadow(var23.renderGlobal.getDebugInfoRenders(), 2, 12, 16777215);
  			var23 = this.mc;
-@@ -166,25 +180,68 @@
+@@ -166,25 +180,69 @@
  			drawString(var4, var18, var3 - var4.getStringWidth(var18) - 2, 2, 14737632);
  			var18 = "Allocated memory: " + var27 * 100L / var24 + "% (" + var27 / 1024L / 1024L + "MB)";
  			drawString(var4, var18, var3 - var4.getStringWidth(var18) - 2, 12, 14737632);
@@ -6263,19 +6633,10 @@
  		} else {
 -			var4.drawStringWithShadow("Minecraft Indev", 2, 2, 16777215);
 +//			var4.drawStringWithShadow("Minecraft Indev", 2, 2, 16777215);
-+		}
-+
-+		GL11.glEnable(GL11.GL_BLEND);
-+		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-+		if (this.mc.getAutosaveTime() <= 5 || ThreadSaveLevel.isBusy()) {
-+			String message = this.mc.getAutosaveTime() <= 5
-+				? "Autosaving..."
-+				: "Writing level to file...";
-+			var4.alpha = 0.5F;
-+			drawCenteredString(var4, message, var3 / 2, 4, 0xFFFFFF);
-+			var4.alpha = 1.0F;
  		}
  
++		GL11.glEnable(GL11.GL_BLEND);
++		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
  		for(var12 = 0; var12 < this.chatMessageList.size() && var12 < 10; ++var12) {
 -			if(((ChatLine)this.chatMessageList.get(var12)).updateCounter < 200) {
 -				this.chatMessageList.get(var12);
@@ -6289,6 +6650,16 @@
  		}
 -
 +		GL11.glDisable(GL11.GL_BLEND);
++	}
++
++	public final void drawAutosaveIndicator() {
++		if (this.mc.getAutosaveTime() > 5 && !ThreadSaveLevel.isBusy()) return;
++
++		ScaledResolution dimensions = new ScaledResolution(this.mc.displayWidth, this.mc.displayHeight);
++		int width = dimensions.getScaledWidth();
++		this.mc.entityRenderer.setupOverlayRendering();
++
++		this.drawAutosaveIcon(this.mc, width - 40, 40);
  	}
  
  	public final void addChatMessage() {
@@ -6311,15 +6682,27 @@
  }
 --- net/minecraft/client/GameSettings.java
 +++ net/minecraft/client/GameSettings.java
-@@ -8,33 +8,38 @@
+@@ -5,36 +5,48 @@
+ import java.io.FileReader;
+ import java.io.FileWriter;
+ import java.io.PrintWriter;
++import java.util.HashSet;
++
  import org.lwjgl.input.Keyboard;
  
  public final class GameSettings {
 -	private static final String[] RENDER_DISTANCES = new String[]{"FAR", "NORMAL", "SHORT", "TINY"};
 +	private static final String[] RENDER_DISTANCES = new String[]{"VERY FAR", "FAR", "NORMAL", "SHORT", "TINY"};
  	private static final String[] DIFFICULTIES = new String[]{"Peaceful", "Easy", "Normal", "Hard"};
- 	public boolean music = true;
- 	public boolean sound = true;
+-	public boolean music = true;
+-	public boolean sound = true;
++	private static final HashSet<Integer> SLIDERS = new HashSet<>(); static {
++		SLIDERS.add(0);
++		SLIDERS.add(1);
++	}
++
++	public float music = 1.0F;
++	public float sound = 1.0F;
  	public boolean invertMouse = false;
  	public boolean showFPS = false;
 +	public boolean showHUD = true;
@@ -6327,7 +6710,7 @@
  	public boolean fancyGraphics = true;
  	public boolean anaglyph = false;
  	public boolean limitFramerate = false;
-+	public boolean advancedOpenGL = true;
++	public boolean advancedOpenGL = false;
  	public KeyBinding keyBindForward = new KeyBinding("Forward", 17);
  	public KeyBinding keyBindLeft = new KeyBinding("Left", 30);
  	public KeyBinding keyBindBack = new KeyBinding("Back", 31);
@@ -6354,45 +6737,139 @@
  
  	public GameSettings(Minecraft var1, File var2) {
  		this.mc = var1;
-@@ -71,7 +76,8 @@
- 		}
+@@ -52,50 +64,78 @@
+ 	}
  
- 		if(var1 == 4) {
+ 	public final void setOptionValue(int var1, int var2) {
+-		if(var1 == 0) {
+-			this.music = !this.music;
+-			this.mc.sndManager.onSoundOptionsChanged();
+-		}
+-
+-		if(var1 == 1) {
+-			this.sound = !this.sound;
+-			this.mc.sndManager.onSoundOptionsChanged();
+-		}
+-
+-		if(var1 == 2) {
+-			this.invertMouse = !this.invertMouse;
+-		}
+-
+-		if(var1 == 3) {
+-			this.showFPS = !this.showFPS;
+-		}
+-
+-		if(var1 == 4) {
 -			this.renderDistance = this.renderDistance + var2 & 3;
-+			this.renderDistance = Math.floorMod(this.renderDistance + var2, 5);
-+			this.mc.renderGlobal.changeWorld(this.mc.theWorld);
- 		}
+-		}
+-
+-		if(var1 == 5) {
+-			this.fancyGraphics = !this.fancyGraphics;
+-		}
+-
+-		if(var1 == 6) {
+-			this.anaglyph = !this.anaglyph;
+-			this.mc.renderEngine.refreshTextures();
+-		}
+-
+-		if(var1 == 7) {
+-			this.limitFramerate = !this.limitFramerate;
+-		}
+-
+-		if(var1 == 8) {
+-			this.difficulty = this.difficulty + var2 & 3;
+-		}
++        switch (var1) {
++            case 2:
++                this.invertMouse = !this.invertMouse;
++                break;
++            case 3:
++                this.showFPS = !this.showFPS;
++                break;
++            case 4:
++                this.renderDistance = Math.floorMod(this.renderDistance + var2, 5);
++                this.mc.renderGlobal.changeWorld(this.mc.theWorld);
++                break;
++            case 5:
++                this.fancyGraphics = !this.fancyGraphics;
++                break;
++            case 6:
++                this.anaglyph = !this.anaglyph;
++                this.mc.renderEngine.refreshTextures();
++                break;
++            case 7:
++                this.limitFramerate = !this.limitFramerate;
++                break;
++            case 8:
++                this.difficulty = this.difficulty + var2 & 3;
++                break;
++            case 9:
++                this.advancedOpenGL = !this.advancedOpenGL;
++                this.mc.renderGlobal.changeWorld(this.mc.theWorld);
++                break;
++        }
  
- 		if(var1 == 5) {
-@@ -91,11 +97,26 @@
- 			this.difficulty = this.difficulty + var2 & 3;
- 		}
- 
-+		if(var1 == 9) {
-+			this.advancedOpenGL = !this.advancedOpenGL;
-+			this.mc.renderGlobal.changeWorld(this.mc.theWorld);
-+		}
-+
  		this.saveOptions();
++	}
++
++	public final void setOptionFloat(int var1, float var2) {
++        switch (var1) {
++            case 0:
++                this.music = var2;
++                this.mc.sndManager.onSoundOptionsChanged();
++                break;
++            case 1:
++                this.sound = var2;
++                this.mc.sndManager.onSoundOptionsChanged();
++                break;
++        }
++	}
++
++	public final boolean isSlider(int var1) {
++		return SLIDERS.contains(var1);
  	}
  
  	public final String setOptionString(int var1) {
 -		return var1 == 0 ? "Music: " + (this.music ? "ON" : "OFF") : (var1 == 1 ? "Sound: " + (this.sound ? "ON" : "OFF") : (var1 == 2 ? "Invert mouse: " + (this.invertMouse ? "ON" : "OFF") : (var1 == 3 ? "Show FPS: " + (this.showFPS ? "ON" : "OFF") : (var1 == 4 ? "Render distance: " + RENDER_DISTANCES[this.renderDistance] : (var1 == 5 ? "View bobbing: " + (this.fancyGraphics ? "ON" : "OFF") : (var1 == 6 ? "3d anaglyph: " + (this.anaglyph ? "ON" : "OFF") : (var1 == 7 ? "Limit framerate: " + (this.limitFramerate ? "ON" : "OFF") : (var1 == 8 ? "Difficulty: " + DIFFICULTIES[this.difficulty] : ""))))))));
-+		return var1 == 0 ? "Music: " + (this.music ? "ON" : "OFF")
-+				: var1 == 1 ? "Sound: " + (this.sound ? "ON" : "OFF")
-+				: var1 == 2 ? "Invert mouse: " + (this.invertMouse ? "ON" : "OFF")
-+				: var1 == 3 ? "Show FPS: " + (this.showFPS ? "ON" : "OFF")
-+				: var1 == 4 ? "Render distance: " + RENDER_DISTANCES[this.renderDistance]
-+				: var1 == 5 ? "View bobbing: " + (this.fancyGraphics ? "ON" : "OFF")
-+				: var1 == 6 ? "3d anaglyph: " + (this.anaglyph ? "ON" : "OFF")
-+				: var1 == 7 ? "Limit framerate: " + (this.limitFramerate ? "ON" : "OFF")
-+				: var1 == 8 ? "Difficulty: " + DIFFICULTIES[this.difficulty]
-+				: var1 == 9 ? "Advanced OpenGL: " + (this.advancedOpenGL ? "ON" : "OFF")
-+				: "";
++		switch (var1) {
++			case 0: return "Music: " + (this.music > 0.0F ? (int)(this.music * 100.0F) + "%" : "OFF");
++			case 1: return "Sound: " + (this.sound > 0.0F ? (int)(this.sound * 100.0F) + "%" : "OFF");
++			case 2: return "Invert mouse: " + (this.invertMouse ? "ON" : "OFF");
++			case 3: return "Show FPS: " + (this.showFPS ? "ON" : "OFF");
++			case 4: return "Render distance: " + RENDER_DISTANCES[this.renderDistance];
++			case 5: return "View bobbing: " + (this.fancyGraphics ? "ON" : "OFF");
++			case 6: return "3d anaglyph: " + (this.anaglyph ? "ON" : "OFF");
++			case 7: return "Limit framerate: " + (this.limitFramerate ? "ON" : "OFF");
++			case 8: return "Difficulty: " + DIFFICULTIES[this.difficulty];
++			case 9: return "Advanced OpenGL: " + (this.advancedOpenGL ? "ON" : "OFF");
++			default: return "";
++		}
++	}
++
++	public final float getOptionFloat(int var1) {
++		switch (var1) {
++			case 0: return this.music;
++			case 1: return this.sound;
++			default: return 0.0F;
++		}
  	}
  
  	private void loadOptions() {
-@@ -147,6 +168,10 @@
+@@ -112,11 +152,11 @@
+ 
+ 					String[] var5 = var2.split(":");
+ 					if(var5[0].equals("music")) {
+-						this.music = var5[1].equals("true");
++						this.music = parseFloat(var5[1]);
+ 					}
+ 
+ 					if(var5[0].equals("sound")) {
+-						this.sound = var5[1].equals("true");
++						this.sound = parseFloat(var5[1]);
+ 					}
+ 
+ 					if(var5[0].equals("invertYMouse")) {
+@@ -147,6 +187,10 @@
  						this.difficulty = Integer.parseInt(var5[1]);
  					}
  
@@ -6403,7 +6880,20 @@
  					for(int var3 = 0; var3 < this.keyBindings.length; ++var3) {
  						if(var5[0].equals("key_" + this.keyBindings[var3].keyDescription)) {
  							this.keyBindings[var3].keyCode = Integer.parseInt(var5[1]);
-@@ -172,6 +197,7 @@
+@@ -160,6 +204,12 @@
+ 		}
+ 	}
+ 
++	private static float parseFloat(String var1) {
++		return var1.equals("true") ? 1.0F
++				: var1.equals("false") ? 0.0F
++				: Float.parseFloat(var1);
++	}
++
+ 	public final void saveOptions() {
+ 		try {
+ 			PrintWriter var1 = new PrintWriter(new FileWriter(this.optionsFile));
+@@ -172,6 +222,7 @@
  			var1.println("anaglyph3d:" + this.anaglyph);
  			var1.println("limitFramerate:" + this.limitFramerate);
  			var1.println("difficulty:" + this.difficulty);
@@ -6411,7 +6901,7 @@
  
  			for(int var2 = 0; var2 < this.keyBindings.length; ++var2) {
  				var1.println("key_" + this.keyBindings[var2].keyDescription + ":" + this.keyBindings[var2].keyCode);
-@@ -182,5 +208,9 @@
+@@ -182,5 +233,9 @@
  			System.out.println("Failed to save options");
  			var3.printStackTrace();
  		}
@@ -6432,6 +6922,15 @@
  		super(var1, Material.plants);
  		this.blockIndexInTexture = var2;
  		this.setTickOnLoad(true);
+@@ -17,7 +17,7 @@
+ 		return this.canThisPlantGrowOnThisBlockID(var1.getBlockId(var2, var3 - 1, var4));
+ 	}
+ 
+-	protected boolean canThisPlantGrowOnThisBlockID(int var1) {
++	public boolean canThisPlantGrowOnThisBlockID(int var1) {
+ 		return var1 == Block.grass.blockID || var1 == Block.dirt.blockID || var1 == Block.tilledField.blockID;
+ 	}
+ 
 @@ -28,6 +28,22 @@
  
  	public void updateTick(World var1, int var2, int var3, int var4, Random var5) {
@@ -6821,7 +7320,7 @@
 +}
 --- net/minecraft/client/render/RenderGlobal.java
 +++ net/minecraft/client/render/RenderGlobal.java
-@@ -22,17 +22,17 @@
+@@ -22,17 +22,18 @@
  import net.minecraft.game.level.IWorldAccess;
  import net.minecraft.game.level.World;
  import net.minecraft.game.level.block.Block;
@@ -6835,6 +7334,7 @@
 -import org.lwjgl.opengl.GL15;
 -import org.lwjgl.opengl.GLContext;
 +import org.lwjgl.opengl.*;
++import org.lwjgl.util.glu.GLU;
  import util.MathHelper;
  
  public final class RenderGlobal implements IWorldAccess {
@@ -6843,7 +7343,7 @@
  	private World worldObj;
  	private RenderEngine renderEngine;
  	private int glGenList;
-@@ -67,7 +67,7 @@
+@@ -67,7 +68,7 @@
  	public RenderGlobal(Minecraft var1, RenderEngine var2) {
  		this.mc = var1;
  		this.renderEngine = var2;
@@ -6852,7 +7352,7 @@
  		this.glRenderListBase = GL11.glGenLists(786432);
  		this.occlusionEnabled = GLContext.getCapabilities().GL_ARB_occlusion_query;
  		if(this.occlusionEnabled) {
-@@ -124,6 +124,9 @@
+@@ -124,6 +125,9 @@
  	}
  
  	public final void loadRenderers() {
@@ -6862,20 +7362,20 @@
  		int var1;
  		if(this.worldRenderers != null) {
  			for(var1 = 0; var1 < this.worldRenderers.length; ++var1) {
-@@ -131,9 +134,9 @@
+@@ -131,9 +135,9 @@
  			}
  		}
  
 -		this.renderChunksWide = this.worldObj.width / 16;
 -		this.renderChunksTall = this.worldObj.height / 16;
 -		this.renderChunksDeep = this.worldObj.length / 16;
-+		this.renderChunksWide = this.worldObj.width / chunkSize;
-+		this.renderChunksTall = this.worldObj.height / chunkSize;
-+		this.renderChunksDeep = this.worldObj.length / chunkSize;
++		this.renderChunksWide = (this.worldObj.width + chunkSize - 1) / chunkSize;
++		this.renderChunksTall = (this.worldObj.height + chunkSize - 1) / chunkSize;
++		this.renderChunksDeep = (this.worldObj.length + chunkSize - 1) / chunkSize;
  		this.worldRenderers = new WorldRenderer[this.renderChunksWide * this.renderChunksTall * this.renderChunksDeep];
  		this.sortedWorldRenderers = new WorldRenderer[this.renderChunksWide * this.renderChunksTall * this.renderChunksDeep];
  		var1 = 0;
-@@ -143,7 +146,7 @@
+@@ -143,7 +147,7 @@
  		for(var3 = 0; var3 < this.renderChunksWide; ++var3) {
  			for(int var4 = 0; var4 < this.renderChunksTall; ++var4) {
  				for(int var5 = 0; var5 < this.renderChunksDeep; ++var5) {
@@ -6884,7 +7384,7 @@
  					if(this.occlusionEnabled) {
  						this.worldRenderers[(var5 * this.renderChunksTall + var4) * this.renderChunksWide + var3].glOcclusionQuery = this.glOcclusionQueryBase.get(var2);
  					}
-@@ -166,6 +169,9 @@
+@@ -166,6 +170,9 @@
  		GL11.glNewList(this.glGenList + 1, GL11.GL_COMPILE);
  		this.oobWaterRenderHeight();
  		GL11.glEndList();
@@ -6894,7 +7394,7 @@
  		this.markBlocksForUpdate(0, 0, 0, this.worldObj.width, this.worldObj.height, this.worldObj.length);
  	}
  
-@@ -175,10 +181,16 @@
+@@ -175,10 +182,16 @@
  		this.countEntitiesTotal = 0;
  		this.countEntitiesRendered = 0;
  		this.countEntitiesHidden = 0;
@@ -6911,7 +7411,7 @@
  					List var8 = var4.entityGrid[(var7 * var4.depth + var6) * var4.width + var5];
  					if(var8.size() != 0) {
  						int var9 = (var5 << 3) + 4;
-@@ -192,9 +204,9 @@
+@@ -192,9 +205,9 @@
  						float var12 = var10001;
  						boolean var10000;
  						if(var12 >= 0.0F && var13 >= 0.0F && var14 >= 0.0F && var12 < (float)this.worldObj.width && var13 < (float)this.worldObj.height && var14 < (float)this.worldObj.length) {
@@ -6924,7 +7424,7 @@
  							var10000 = this.worldRenderers[(var20 * this.renderChunksTall + var19) * this.renderChunksWide + var17].isInFrustrum && this.worldRenderers[(var20 * this.renderChunksTall + var19) * this.renderChunksWide + var17].isVisible;
  						} else {
  							var10000 = true;
-@@ -238,6 +250,11 @@
+@@ -238,6 +251,11 @@
  	}
  
  	public final int sortAndRender(EntityPlayer var1, int var2) {
@@ -6936,7 +7436,7 @@
  		if(var2 == 0) {
  			this.renderersLoaded = 0;
  			this.renderersBeingClipped = 0;
-@@ -248,7 +265,7 @@
+@@ -248,7 +266,7 @@
  		float var3 = var1.posX - this.prevSortX;
  		float var4 = var1.posY - this.prevSortY;
  		float var5 = var1.posZ - this.prevSortZ;
@@ -6945,7 +7445,7 @@
  			this.prevSortX = var1.posX;
  			this.prevSortY = var1.posY;
  			this.prevSortZ = var1.posZ;
-@@ -256,7 +273,7 @@
+@@ -256,7 +274,7 @@
  		}
  
  		int var8;
@@ -6954,7 +7454,7 @@
  			int var10 = 8;
  			this.checkOcclusionQueryResult(0, 8);
  
-@@ -265,7 +282,7 @@
+@@ -265,7 +283,7 @@
  				this.sortedWorldRenderers[var6].isVisible = true;
  			}
  
@@ -6963,7 +7463,7 @@
  
  			do {
  				int var9 = var10;
-@@ -305,7 +322,7 @@
+@@ -305,7 +323,7 @@
  				var8 += this.renderSortedRenderers(var9, var10, var2);
  			} while(var10 < this.sortedWorldRenderers.length);
  		} else {
@@ -6972,7 +7472,7 @@
  		}
  
  		return var8;
-@@ -371,6 +388,10 @@
+@@ -371,6 +389,10 @@
  	}
  
  	public final void renderSky(float var1) {
@@ -6983,7 +7483,7 @@
  		GL11.glDisable(GL11.GL_TEXTURE_2D);
  		Vec3D var2 = this.worldObj.getSkyColor(var1);
  		float var3 = var2.xCoord;
-@@ -389,7 +410,7 @@
+@@ -389,7 +411,7 @@
  		Tessellator var12 = Tessellator.instance;
  		var12.startDrawingQuads();
  		var12.setColorOpaque_F(var3, var4, var9);
@@ -6992,7 +7492,30 @@
  
  		int var10;
  		for(var10 = -2048; var10 < this.worldObj.width + 2048; var10 += 512) {
-@@ -434,11 +455,16 @@
+@@ -401,16 +423,19 @@
+ 			}
+ 		}
+ 
++		GL11.glPushMatrix();
++		GL11.glTranslatef(px, 0.0F, pz);
+ 		var12.draw();
++		GL11.glPopMatrix();
+ 		GL11.glEnable(GL11.GL_TEXTURE_2D);
+ 		GL11.glDisable(GL11.GL_FOG);
+ 		GL11.glDisable(GL11.GL_ALPHA_TEST);
+ 		GL11.glEnable(GL11.GL_BLEND);
+ 		GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
+ 		GL11.glPushMatrix();
+-		var3 = this.worldObj.playerEntity.lastTickPosX + (this.worldObj.playerEntity.posX - this.worldObj.playerEntity.lastTickPosX) * var1;
+-		var4 = this.worldObj.playerEntity.lastTickPosY + (this.worldObj.playerEntity.posY - this.worldObj.playerEntity.lastTickPosY) * var1;
+-		float var6 = this.worldObj.playerEntity.lastTickPosZ + (this.worldObj.playerEntity.posZ - this.worldObj.playerEntity.lastTickPosZ) * var1;
++		var3 = px;
++		var4 = py;
++		float var6 = pz;
+ 		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
+ 		GL11.glTranslatef(var3, var4, var6);
+ 		GL11.glRotatef(0.0F, 0.0F, 0.0F, 1.0F);
+@@ -434,21 +459,44 @@
  		GL11.glColor4f(var9, var9, var9, var9);
  		GL11.glCallList(this.glSkyList);
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -7000,22 +7523,38 @@
  		GL11.glEnable(GL11.GL_TEXTURE_2D);
 -		GL11.glDisable(GL11.GL_BLEND);
 -		GL11.glEnable(GL11.GL_ALPHA_TEST);
+-		GL11.glEnable(GL11.GL_FOG);
 +		GL11.glEnable(GL11.GL_BLEND);
 +		GL11.glDisable(GL11.GL_DEPTH_TEST);
 +		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-+		GL11.glPopMatrix();
+ 		GL11.glPopMatrix();
 +
- 		GL11.glEnable(GL11.GL_FOG);
--		GL11.glPopMatrix();
++		GL11.glEnable(GL11.GL_FOG);
++		GL11.glEnable(GL11.GL_ALPHA_TEST);
++		GL11.glEnable(GL11.GL_DEPTH_TEST);
++		GL11.glDepthMask(true);
++		GL11.glDisable(GL11.GL_BLEND);
++	}
++
++	public final void renderClouds(float var1) {
++		float px = this.mc.thePlayer.lastTickPosX + (this.mc.thePlayer.posX - this.mc.thePlayer.lastTickPosX) * var1;
++		float py = this.mc.thePlayer.lastTickPosY + (this.mc.thePlayer.posY - this.mc.thePlayer.lastTickPosY) * var1;
++		float pz = this.mc.thePlayer.lastTickPosZ + (this.mc.thePlayer.posZ - this.mc.thePlayer.lastTickPosZ) * var1;
++
++		Tessellator var12 = Tessellator.instance;
++		GL11.glEnable(GL11.GL_FOG);
 +		GL11.glEnable(GL11.GL_ALPHA_TEST);
 +		GL11.glEnable(GL11.GL_DEPTH_TEST);
  		GL11.glDepthMask(true);
  		GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.renderEngine.getTexture("/clouds.png"));
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-@@ -446,6 +472,11 @@
- 		var4 = var11.xCoord;
- 		var6 = var11.yCoord;
- 		var3 = var11.zCoord;
+ 		Vec3D var11 = this.worldObj.getCloudColor(var1);
+-		var4 = var11.xCoord;
+-		var6 = var11.yCoord;
+-		var3 = var11.zCoord;
++		float var4 = var11.xCoord;
++		float var6 = var11.yCoord;
++		float var3 = var11.zCoord;
 +		Vec3D var11a = this.worldObj.getSkyColor(var1);
 +		float a = 0.5F + this.mc.options.renderDistance * 0.25F;
 +		float var4a = MathHelper.lerp(var11.xCoord, var11a.xCoord, a);
@@ -7023,42 +7562,67 @@
 +		float var3a = MathHelper.lerp(var11.zCoord, var11a.zCoord, a);
  		float var7;
  		if(this.mc.options.anaglyph) {
- 			var9 = (var4 * 30.0F + var6 * 59.0F + var3 * 11.0F) / 100.0F;
-@@ -456,13 +487,26 @@
+-			var9 = (var4 * 30.0F + var6 * 59.0F + var3 * 11.0F) / 100.0F;
++			float var9 = (var4 * 30.0F + var6 * 59.0F + var3 * 11.0F) / 100.0F;
+ 			var7 = (var4 * 30.0F + var6 * 70.0F) / 100.0F;
+ 			var3 = (var4 * 30.0F + var3 * 70.0F) / 100.0F;
+ 			var4 = var9;
+@@ -456,33 +504,65 @@
  			var3 = var3;
  		}
  
 -		var9 = (float)this.worldObj.cloudHeight;
-+		var9 = (float)this.worldObj.cloudHeight + 0.1F;
++		float var9 = (float)this.worldObj.cloudHeight + 0.5F;
 +		float var9a = var9 + 64.0F * Math.signum(this.worldObj.cloudHeight + 0.5F);
  		var7 = ((float)this.cloudOffsetX + var1) * (0.5F / 1024.0F) * 0.03F;
  		var12.startDrawingQuads();
 -		var12.setColorOpaque_F(var4, var6, var3);
  
  		for(int var8 = -2048; var8 < this.worldObj.width + 2048; var8 += 512) {
- 			for(var10 = -2048; var10 < this.worldObj.length + 2048; var10 += 512) {
-+				if (a > 0.0F) {
+-			for(var10 = -2048; var10 < this.worldObj.length + 2048; var10 += 512) {
+-				var12.addVertexWithUV((float)var8, var9, (float)(var10 + 512), (float)var8 * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)(var8 + 512), var9, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)(var8 + 512), var9, (float)var10, (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)var8, var9, (float)var10, (float)var8 * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)var8, var9, (float)var10, (float)var8 * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)(var8 + 512), var9, (float)var10, (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)(var8 + 512), var9, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
+-				var12.addVertexWithUV((float)var8, var9, (float)(var10 + 512), (float)var8 * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
++			for(int var10 = -2048; var10 < this.worldObj.length + 2048; var10 += 512) {
++				float scaleTop = 1.0F / 4096.0F;
++				float scaleBottom = 1.0F / 2048.0F;
++
++				float var8f = var8 + px;
++				float var10f = var10 + pz;
++				if (a > 0.0F && this.mc.options.renderDistance < 2) {
 +					var12.setColorRGBA_F(var4a, var6a, var3a, 1.0F);
-+					var12.addVertexWithUV((float)var8, var9a, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 2048.0F) + var7, (float)(var10 + 1024) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)(var8 + 512), var9a, (float)(var10 + 512), (float)(var8 + 1024) * (0.5F / 2048.0F) + var7, (float)(var10 + 1024) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)(var8 + 512), var9a, (float)var10, (float)(var8 + 1024) * (0.5F / 2048.0F) + var7, (float)(var10 + 512) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)var8, var9a, (float)var10, (float)(var8 + 512) * (0.5F / 2048.0F) + var7, (float)(var10 + 512) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)var8, var9a, (float)var10, (float)(var8 + 512) * (0.5F / 2048.0F) + var7, (float)(var10 + 512) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)(var8 + 512), var9a, (float)var10, (float)(var8 + 1024) * (0.5F / 2048.0F) + var7, (float)(var10 + 512) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)(var8 + 512), var9a, (float)(var10 + 512), (float)(var8 + 1024) * (0.5F / 2048.0F) + var7, (float)(var10 + 1024) * (0.5F / 2048.0F));
-+					var12.addVertexWithUV((float)var8, var9a, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 2048.0F) + var7, (float)(var10 + 1024) * (0.5F / 2048.0F));
++					var12.addVertexWithUV(var8,       var9a, var10 + 512, (var8f + 0)    * scaleTop + var7 + 0.5F, (var10f + 512)  * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8 + 512, var9a, var10 + 512, (var8f + 512)  * scaleTop + var7 + 0.5F, (var10f + 512)  * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8 + 512, var9a, var10,       (var8f + 512)  * scaleTop + var7 + 0.5F, (var10f + 0)    * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8,       var9a, var10,       (var8f + 0)    * scaleTop + var7 + 0.5F, (var10f + 0)    * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8,       var9a, var10,       (var8f + 0)    * scaleTop + var7 + 0.5F, (var10f + 0)    * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8 + 512, var9a, var10,       (var8f + 512)  * scaleTop + var7 + 0.5F, (var10f + 0)    * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8 + 512, var9a, var10 + 512, (var8f + 512)  * scaleTop + var7 + 0.5F, (var10f + 512)  * scaleTop + 0.5F);
++					var12.addVertexWithUV(var8,       var9a, var10 + 512, (var8f + 0)    * scaleTop + var7 + 0.5F, (var10f + 512)  * scaleTop + 0.5F);
 +				}
 +
 +				var12.setColorRGBA_F(var4, var6, var3, 1.0F);
- 				var12.addVertexWithUV((float)var8, var9, (float)(var10 + 512), (float)var8 * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
- 				var12.addVertexWithUV((float)(var8 + 512), var9, (float)(var10 + 512), (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)(var10 + 512) * (0.5F / 1024.0F));
- 				var12.addVertexWithUV((float)(var8 + 512), var9, (float)var10, (float)(var8 + 512) * (0.5F / 1024.0F) + var7, (float)var10 * (0.5F / 1024.0F));
-@@ -475,14 +519,26 @@
++				var12.addVertexWithUV(var8,       var9, var10 + 512, (var8f + 0)    * scaleBottom + var7, (var10f + 512)  * scaleBottom);
++				var12.addVertexWithUV(var8 + 512, var9, var10 + 512, (var8f + 512)  * scaleBottom + var7, (var10f + 512)  * scaleBottom);
++				var12.addVertexWithUV(var8 + 512, var9, var10,       (var8f + 512)  * scaleBottom + var7, (var10f + 0)    * scaleBottom);
++				var12.addVertexWithUV(var8,       var9, var10,       (var8f + 0)    * scaleBottom + var7, (var10f + 0)    * scaleBottom);
++				var12.addVertexWithUV(var8,       var9, var10,       (var8f + 0)    * scaleBottom + var7, (var10f + 0)    * scaleBottom);
++				var12.addVertexWithUV(var8 + 512, var9, var10,       (var8f + 512)  * scaleBottom + var7, (var10f + 0)    * scaleBottom);
++				var12.addVertexWithUV(var8 + 512, var9, var10 + 512, (var8f + 512)  * scaleBottom + var7, (var10f + 512)  * scaleBottom);
++				var12.addVertexWithUV(var8,       var9, var10 + 512, (var8f + 0)    * scaleBottom + var7, (var10f + 512)  * scaleBottom);
+ 			}
  		}
  
++		GL11.glPushMatrix();
++		GL11.glTranslated(px, 0.0F, pz);
  		var12.draw();
++		GL11.glPopMatrix();
 +		GL11.glDisable(GL11.GL_BLEND);
-+		GL11.glBlendFunc(GL11.GL_ONE, GL11.GL_ONE);
  	}
  
  	public final void oobGroundRenderer() {
@@ -7083,7 +7647,7 @@
  
  		GL11.glColor4f(var1, var1, var1, 1.0F);
  		GL11.glEnable(GL11.GL_TEXTURE_2D);
-@@ -492,23 +548,30 @@
+@@ -492,23 +572,30 @@
  	private void oobGroundRenderHeight() {
  		Tessellator var1 = Tessellator.instance;
  		float var2 = (float)this.worldObj.getGroundLevel();
@@ -7119,7 +7683,7 @@
  					var1.addVertexWithUV((float)(var5 + var3), var2, (float)var6, (float)var3, 0.0F);
  					var1.addVertexWithUV((float)var5, var2, (float)var6, 0.0F, 0.0F);
  				}
-@@ -521,8 +584,18 @@
+@@ -521,8 +608,18 @@
  	public final void oobWaterRenderer() {
  		GL11.glEnable(GL11.GL_TEXTURE_2D);
  		GL11.glEnable(GL11.GL_BLEND);
@@ -7140,7 +7704,7 @@
  		GL11.glColor4f(var1, var1, var1, 1.0F);
  		GL11.glCallList(this.glGenList + 1);
  		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-@@ -534,31 +607,33 @@
+@@ -534,31 +631,33 @@
  		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
  		Tessellator var2 = Tessellator.instance;
  		int var3 = 128;
@@ -7186,7 +7750,7 @@
  				}
  			}
  		}
-@@ -567,22 +642,104 @@
+@@ -567,22 +666,118 @@
  		GL11.glDisable(GL11.GL_BLEND);
  	}
  
@@ -7207,6 +7771,7 @@
 -		}
 -
 +	public final void oobHorizonRender(float var1) {
++		float dist = HorizonShader.getHorizonDistance();
 +		float alpha = 1.0F - MathHelper.sqrt_float(this.mc.options.renderDistance) / MathHelper.sqrt_float(3.0F);
 +		if (alpha < 0.1F) {
 +			return;
@@ -7217,11 +7782,19 @@
 +			return;
 +		}
 +
++		if (!HorizonShader.isGl20Supported()) {
++			GL11.glDepthRange(1.0D, 1.0D);
++		}
++
 +		float px = this.mc.thePlayer.lastTickPosX + (this.mc.thePlayer.posX - this.mc.thePlayer.lastTickPosX) * var1;
 +		float py = this.mc.thePlayer.lastTickPosY + (this.mc.thePlayer.posY - this.mc.thePlayer.lastTickPosY) * var1;
 +		float pz = this.mc.thePlayer.lastTickPosZ + (this.mc.thePlayer.posZ - this.mc.thePlayer.lastTickPosZ) * var1;
-+		float opy = (py - Math.max(this.worldObj.waterLevel, this.worldObj.groundLevel)) / 96.0F;
-+		float yOffset = (py - Math.max(this.worldObj.waterLevel, this.worldObj.groundLevel)) * (1.0F - this.mc.options.getRenderDistance() / 512.0F);
++		int baseLevel = Math.max(Math.max(this.worldObj.waterLevel, this.worldObj.groundLevel), 0);
++		float opy = Math.abs(py - baseLevel) / (HorizonShader.isGl20Supported() ? this.mc.options.getRenderDistance() / 2.0F : 96.0F);
++		float yOffset = (py - baseLevel) * (1.0F - this.mc.options.getRenderDistance() * dist / 512.0F);
++		if ("floating".equals(horizonType)) {
++			yOffset -= this.mc.options.getRenderDistance() * 0.05F;
++		}
 +		Vec3D color = this.worldObj.getSkyColor(var1);
 +		GL11.glColor4f(color.xCoord, color.yCoord, color.zCoord, alpha * (1.0F - opy * opy));
 +		GL13.glActiveTexture(GL13.GL_TEXTURE1);
@@ -7235,6 +7808,10 @@
 +		HorizonShader.stop();
 +		GL11.glPopMatrix();
 +		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
++
++		if (!HorizonShader.isGl20Supported()) {
++			GL11.glDepthRange(0.0D, 1.0D);
++		}
 +	}
 +
 +	private void oobHorizonRenderHeight() {
@@ -7244,9 +7821,10 @@
 +		int segments = 32;
 +		float pi = (float)Math.PI;
 +		float pi2 = pi * 2.0F;
-+		float d = this.mc.options.getRenderDistance() * 0.99F;
++		// Can't use HorizonShader here because it breaks the shader for some reason
++		float d = this.mc.options.getRenderDistance() * (GLContext.getCapabilities().OpenGL20 ? 0.5F : 0.99F);
 +
-+		float minY = Math.max(this.mc.theWorld.waterLevel, this.mc.theWorld.groundLevel);
++		float minY = Math.max(Math.max(this.mc.theWorld.waterLevel, this.mc.theWorld.groundLevel), 0);
 +		float maxY = minY + d / pi;
 +
 +		float[] x = new float[segments];
@@ -7307,7 +7885,7 @@
  	}
  
  	public final void drawBlockBreaking(MovingObjectPosition var1, int var2, ItemStack var3) {
-@@ -618,6 +775,8 @@
+@@ -618,6 +813,8 @@
  	}
  
  	public final void drawSelectionBox(MovingObjectPosition var1, int var2) {
@@ -7316,7 +7894,7 @@
  		GL11.glEnable(GL11.GL_BLEND);
  		GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
  		GL11.glColor4f(0.0F, 0.0F, 0.0F, 0.4F);
-@@ -626,7 +785,7 @@
+@@ -626,7 +823,7 @@
  		GL11.glDepthMask(false);
  		var2 = this.worldObj.getBlockId(var1.blockX, var1.blockY, var1.blockZ);
  		if(var2 > 0) {
@@ -7325,7 +7903,7 @@
  			Tessellator var4 = Tessellator.instance;
  			var4.startDrawing(3);
  			var4.addVertex(var3.minX, var3.minY, var3.minZ);
-@@ -660,12 +819,12 @@
+@@ -660,12 +857,12 @@
  	}
  
  	private void markBlocksForUpdate(int var1, int var2, int var3, int var4, int var5, int var6) {
@@ -7344,7 +7922,7 @@
  		if(var1 < 0) {
  			var1 = 0;
  		}
-@@ -714,7 +873,7 @@
+@@ -714,7 +911,7 @@
  
  	public final void clipRenderersByFrustrum(ICamera var1) {
  		for(int var2 = 0; var2 < this.worldRenderers.length; ++var2) {
@@ -7353,7 +7931,7 @@
  		}
  
  	}
-@@ -774,5 +933,20 @@
+@@ -774,5 +971,20 @@
  		GL11.glNewList(this.glGenList + 1, GL11.GL_COMPILE);
  		this.oobWaterRenderHeight();
  		GL11.glEndList();
@@ -7376,7 +7954,7 @@
  }
 --- /dev/null
 +++ net/minecraft/client/render/HorizonShader.java
-@@ -1,0 +1,82 @@
+@@ -1,0 +1,84 @@
 +package net.minecraft.client.render;
 +
 +import org.lwjgl.opengl.GL20;
@@ -7384,31 +7962,33 @@
 +
 +public class HorizonShader {
 +	private static final String fs = String.join("\n",
-+		"uniform sampler2D tex, mask;",
-+		"void main() {",
-+		"   vec4 color = texture2D(tex, gl_TexCoord[0].xy);",
-+		"   color *= gl_Color;",
-+		"   float alpha = texture2D(mask, gl_TexCoord[0].xy).a;",
-+		"   gl_FragColor = vec4(color.xyz, color.a * alpha);",
-+		"}"
++			"uniform sampler2D tex, mask;",
++			"void main() {",
++			"   vec4 color = texture2D(tex, gl_TexCoord[0].xy);",
++			"   color *= gl_Color;",
++			"   float alpha = texture2D(mask, gl_TexCoord[0].xy).a;",
++			"   gl_FragColor = vec4(color.xyz, color.a * alpha);",
++			"	gl_FragDepth = 1.0;",
++			"}"
 +	);
 +	private static final String vs = String.join("\n",
-+		"void main() {",
-+		"   mat4 mvp = gl_ModelViewProjectionMatrix;",
-+//		"   mvp[0].x = 1.0",
-+//		"   mvp[1].x = 0.0",
-+//		"   mvp[2].x = 0.0",
-+//		"   mvp[0].z = 0.0",
-+//		"   mvp[1].z = 0.0",
-+//		"   mvp[2].z = 1.0",
-+		"   gl_Position = mvp * gl_Vertex;",
-+		"   gl_FrontColor = gl_Color;",
-+		"   gl_TexCoord[0] = gl_MultiTexCoord0;",
-+		"}"
++			"void main() {",
++			"   gl_Position = gl_ProjectionMatrix * gl_ModelViewMatrix * gl_Vertex;",
++			"   gl_FrontColor = gl_Color;",
++			"   gl_TexCoord[0] = gl_MultiTexCoord0;",
++			"}"
 +	);
 +
 +	private static final boolean GL20_SUPPORTED = GLContext.getCapabilities().OpenGL20;
 +	private static final int ID;
++
++	public static boolean isGl20Supported() {
++		return GL20_SUPPORTED;
++	}
++
++	public static float getHorizonDistance() {
++		return GL20_SUPPORTED ? 0.5F : 0.99F;
++	}
 +
 +	static {
 +		if (!GL20_SUPPORTED) {
@@ -7461,9 +8041,55 @@
 +}
 --- net/minecraft/client/sound/SoundManager.java
 +++ net/minecraft/client/sound/SoundManager.java
-@@ -76,9 +76,11 @@
+@@ -20,7 +20,7 @@
+ 
+ 	public final void loadSoundSettings(GameSettings var1) {
+ 		this.options = var1;
+-		if(!this.loaded && (var1.sound || var1.music)) {
++		if(!this.loaded && (var1.sound > 0.0F || var1.music > 0.0F)) {
+ 			this.tryToSetLibraryAndCodecs();
+ 		}
+ 
+@@ -28,10 +28,10 @@
+ 
+ 	private void tryToSetLibraryAndCodecs() {
+ 		try {
+-			boolean var1 = this.options.sound;
+-			boolean var2 = this.options.music;
+-			this.options.sound = false;
+-			this.options.music = false;
++			float var1 = this.options.sound;
++			float var2 = this.options.music;
++			this.options.sound = 0.0F;
++			this.options.music = 0.0F;
+ 			this.options.saveOptions();
+ 			SoundSystemConfig.addLibrary(LibraryLWJGLOpenAL.class);
+ 			SoundSystemConfig.setCodec("ogg", CodecJOrbis.class);
+@@ -48,14 +48,15 @@
+ 	}
+ 
+ 	public final void onSoundOptionsChanged() {
+-		if(!this.loaded && (this.options.sound || this.options.music)) {
++		if (!this.loaded && (this.options.sound > 0.0F || this.options.music > 0.0F)) {
+ 			this.tryToSetLibraryAndCodecs();
+ 		}
+ 
+-		if(!this.options.music) {
++		if (this.options.music == 0.0F) {
+ 			this.sndSystem.stop("BgMusic");
++		} else {
++			this.sndSystem.setVolume("BgMusic", this.options.music);
+ 		}
+-
+ 	}
+ 
+ 	public final void closeMinecraft() {
+@@ -74,18 +75,22 @@
+ 	}
+ 
  	public final void playRandomMusicIfReady(float var1, float var2, float var3) {
- 		if(this.loaded && this.options.music) {
+-		if(this.loaded && this.options.music) {
++		if(this.loaded && this.options.music > 0.0F) {
  			if(!this.sndSystem.playing("BgMusic")) {
 -				SoundPoolEntry var4 = this.soundPoolMusic.getRandomSoundFromSoundPool("calm");
 -				this.sndSystem.newStreamingSource(true, "BgMusic", var4.soundUrl, var4.soundName, false, var1, var2, var3, 2, 32.0F);
@@ -7471,14 +8097,61 @@
 +				SoundPoolEntry var4 = this.soundPoolMusic.getRandomSound();
 +				if (var4 != null) {
 +					this.sndSystem.backgroundMusic("BgMusic", var4.soundUrl, var4.soundName, false);
++					this.sndSystem.setVolume("BgMusic", var2 * this.options.music);
++					this.sndSystem.setPitch("BgMusic", var3);
 +					this.sndSystem.play("BgMusic");
 +				}
  			}
  
  		}
+ 	}
+ 
+ 	public final void setListener(EntityLiving var1, float var2) {
+-		if(this.loaded && this.options.sound) {
++		if(this.loaded && this.options.sound > 0.0F) {
+ 			if(var1 != null) {
+ 				float var3 = var1.prevRotationPitch + (var1.rotationPitch - var1.prevRotationPitch) * var2;
+ 				float var4 = var1.prevRotationYaw + (var1.rotationYaw - var1.prevRotationYaw) * var2;
+@@ -107,7 +112,7 @@
+ 	}
+ 
+ 	public final void playSound(String var1, float var2, float var3, float var4, float var5, float var6) {
+-		if(this.loaded && this.options.sound) {
++		if(this.loaded && this.options.sound > 0.0F) {
+ 			SoundPoolEntry var9 = this.soundPoolSounds.getRandomSoundFromSoundPool(var1);
+ 			if(var9 != null && var5 > 0.0F) {
+ 				this.latestSoundID = (this.latestSoundID + 1) % 256;
+@@ -123,7 +128,7 @@
+ 					var5 = 1.0F;
+ 				}
+ 
+-				this.sndSystem.setVolume(var7, var5);
++				this.sndSystem.setVolume(var7, var5 * this.options.sound);
+ 				this.sndSystem.play(var7);
+ 			}
+ 
+@@ -131,14 +136,15 @@
+ 	}
+ 
+ 	public final void playSoundFX(String var1, float var2, float var3) {
+-		if(this.loaded && this.options.sound) {
++		if(this.loaded && this.options.sound > 0.0F) {
+ 			SoundPoolEntry var4 = this.soundPoolSounds.getRandomSoundFromSoundPool(var1);
+ 			if(var4 != null) {
+ 				this.latestSoundID = (this.latestSoundID + 1) % 256;
+ 				String var5 = "sound_" + this.latestSoundID;
+ 				this.sndSystem.newSource(false, var5, var4.soundUrl, var4.soundName, false, 0.0F, 0.0F, 0.0F, 0, 0.0F);
+-				this.sndSystem.setPitch(var5, 1.0F);
+-				this.sndSystem.setVolume(var5, 0.25F);
++				var2 *= 0.25F;
++				this.sndSystem.setPitch(var5, var3);
++				this.sndSystem.setVolume(var5, var2 * this.options.sound);
+ 				this.sndSystem.play(var5);
+ 			}
+ 
 --- net/minecraft/client/gui/GuiIngameMenu.java
 +++ net/minecraft/client/gui/GuiIngameMenu.java
-@@ -1,13 +1,28 @@
+@@ -1,18 +1,30 @@
  package net.minecraft.client.gui;
  
 +import net.minecraft.client.ThreadSaveLevel;
@@ -7495,24 +8168,30 @@
 -		this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 48, "Save level.."));
 -		this.controlList.add(new GuiButton(3, this.width / 2 - 100, this.height / 4 + 72, "Load level.."));
 -		this.controlList.add(new GuiButton(4, this.width / 2 - 100, this.height / 4 + 120, "Back to game"));
-+		if (this.mc.theWorld != null && this.mc.adventureMode) {
+-		if(this.mc.session == null) {
+-			((GuiButton)this.controlList.get(2)).enabled = false;
+-			((GuiButton)this.controlList.get(3)).enabled = false;
++		if (this.mc.theWorld != null) {
 +			this.controlList.add(new GuiButton(4, this.width / 2 - 100, this.height / 4 + 12, "Back to game"));
-+			this.controlList.add(new GuiButton(5, this.width / 2 - 100, this.height / 4 + 36, "Delete world..."));
 +			this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 4 + 84, "Options..."));
-+			this.controlList.add(new GuiButton(6, this.width / 2 - 100, this.height / 4 + 108, "Save and quit to title"));
-+			((GuiButton)this.controlList.get(1)).enabled = false;
-+		} else {
++			this.controlList.add(new GuiButton(6, this.width / 2 - 100, this.height / 4 + 108,
++					this.mc.worldSaveLocation == null ? "Quit to title" : "Save and quit to title"));
++			if (!this.mc.adventureMode && this.mc.worldSaveLocation == null) {
++				this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 36, "Save level..."));
++			}
++		} else if (false) {
 +			this.controlList.add(new GuiButton(4, this.width / 2 - 100, this.height / 4 + 12, "Back to game"));
 +			this.controlList.add(new GuiButton(2, this.width / 2 - 100, this.height / 4 + 36, 98, 20, "Save level..."));
 +			this.controlList.add(new GuiButton(3, this.width / 2 + 2, this.height / 4 + 36, 98, 20, "Load level..."));
 +			this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 4 + 84, 98, 20, "Options..."));
 +			this.controlList.add(new GuiButton(1, this.width / 2 + 2, this.height / 4 + 84, 98, 20, "New level..."));
 +			this.controlList.add(new GuiButton(6, this.width / 2 - 100, this.height / 4 + 108, "Quit to title"));
-+		}
- 		if(this.mc.session == null) {
- 			((GuiButton)this.controlList.get(2)).enabled = false;
- 			((GuiButton)this.controlList.get(3)).enabled = false;
-@@ -24,14 +39,12 @@
+ 		}
+-
+ 	}
+ 
+ 	protected final void actionPerformed(GuiButton var1) {
+@@ -24,14 +36,17 @@
  			this.mc.displayGuiScreen(new GuiNewLevel(this));
  		}
  
@@ -7521,7 +8200,12 @@
 -				this.mc.displayGuiScreen(new GuiSaveLevel(this));
 -			}
 +		if(var1.id == 2) {
-+			this.mc.displayGuiScreen(new GuiTextPrompt(this, "Enter level name", this.mc::saveLevel));
++			this.mc.displayGuiScreen(new GuiTextPrompt(null, "Enter level name", path -> {
++				this.mc.saveLevel(path);
++				if (this.mc.worldSaveLocation != null) {
++					this.mc.ingameGUI.sendChatMessage("&aSaved as &e\"" + path + "\"&a!");
++				}
++			}));
 +		}
  
 -			if(var1.id == 3) {
@@ -7532,7 +8216,7 @@
  		}
  
  		if(var1.id == 4) {
-@@ -39,6 +52,34 @@
+@@ -39,6 +54,34 @@
  			this.mc.setIngameFocus();
  		}
  
@@ -7554,22 +8238,22 @@
 +	}
 +
 +	public void updateScreen() {
-+		if (++this.updateCounter == 1 && this.mc.adventureMode && !ThreadSaveLevel.isBusy()) {
++		if (++this.updateCounter == 1 && this.mc.worldSaveLocation != null && !ThreadSaveLevel.isBusy()) {
 +			try {
-+				this.mc.saveWorld(false);
++				if (this.mc.adventureMode) {
++					this.mc.saveWorld(false);
++				} else {
++					this.mc.saveCurrentLevel(false);
++				}
 +			} catch (IOException e) {
 +			}
-+		}
-+
-+		if (this.mc.adventureMode) {
-+			((GuiButton)this.controlList.get(1)).enabled = this.updateCounter > 1 && !ThreadSaveLevel.isBusy();
 +		}
  	}
  
  	public final void drawScreen(int var1, int var2, float var3) {
 --- net/minecraft/game/item/recipe/CraftingManager.java
 +++ net/minecraft/game/item/recipe/CraftingManager.java
-@@ -20,24 +20,58 @@
+@@ -20,24 +20,60 @@
  		(new RecipesTools()).addRecipes(this);
  		(new RecipesWeapons()).addRecipes(this);
  		(new RecipesIngots()).addRecipes(this);
@@ -7587,6 +8271,8 @@
 +		this.addRecipe(new ItemStack(Block.crate), "###", "# #", "###", '#', Block.planks);
 +		this.addRecipe(new ItemStack(Block.stoneOvenIdle), "###", "# #", "###", '#', Block.cobblestone);
 +		this.addRecipe(new ItemStack(Block.workbench), "##", "##", '#', Block.planks);
++		this.addRecipe(new ItemStack(Item.doorWood, 3), "##", "##", "##", '#', Block.planks);
++		this.addRecipe(new ItemStack(Item.doorSteel, 3), "##", "##", "##", '#', Item.ingotIron);
  		(new RecipesArmor()).addRecipes(this);
 -		this.addRecipe(new ItemStack(Block.clothGray, 1), new Object[]{"###", "###", "###", Character.valueOf('#'), Item.silk});
 -		this.addRecipe(new ItemStack(Block.tnt, 1), new Object[]{"X#X", "#X#", "X#X", Character.valueOf('X'), Item.gunpowder, Character.valueOf('#'), Block.sand});
@@ -7645,7 +8331,7 @@
  		Collections.sort(this.recipes, new RecipeSorter(this));
  		System.out.println(this.recipes.size() + " recipes");
  	}
-@@ -77,15 +111,15 @@
+@@ -77,15 +113,15 @@
  				var15 = ((Block)var2[var4 + 1]).blockID;
  			}
  
@@ -7664,7 +8350,7 @@
  			} else {
  				var14[var15] = -1;
  			}
-@@ -103,5 +137,17 @@
+@@ -103,5 +139,17 @@
  		}
  
  		return null;
@@ -8509,12 +9195,14 @@
  }
 --- net/minecraft/client/gui/GuiSaveLevel.java
 +++ net/minecraft/client/gui/GuiSaveLevel.java
-@@ -35,7 +35,7 @@
+@@ -33,9 +33,7 @@
+ 
+ 	protected final void openLevel(File var1) {
  		try {
- 			FileOutputStream var3 = new FileOutputStream(var1);
- 			(new PlayerLoader(this.mc, this.mc.loadingScreen)).save(this.mc.theWorld, var3);
+-			FileOutputStream var3 = new FileOutputStream(var1);
+-			(new PlayerLoader(this.mc, this.mc.loadingScreen)).save(this.mc.theWorld, var3);
 -			var3.close();
-+//			var3.close();
++			(new PlayerLoader(this.mc, this.mc.loadingScreen)).save(this.mc.theWorld, var1);
  		} catch (IOException var2) {
  			var2.printStackTrace();
  		}
@@ -8537,6 +9225,19 @@
  		this.posXPlus = var2 + this.sizeWidth / 2;
  		this.posYPlus = var3 + this.sizeHeight / 2;
  		this.posZPlus = var4 + this.sizeDepth / 2;
+@@ -59,9 +60,9 @@
+ 			int var1 = this.posX;
+ 			int var2 = this.posY;
+ 			int var3 = this.posZ;
+-			int var4 = this.posX + this.sizeWidth;
+-			int var5 = this.posY + this.sizeHeight;
+-			int var6 = this.posZ + this.sizeDepth;
++			int var4 = Math.min(this.posX + this.sizeWidth, this.worldObj.width);
++			int var5 = Math.min(this.posY + this.sizeHeight, this.worldObj.height);
++			int var6 = Math.min(this.posZ + this.sizeDepth, this.worldObj.length);
+ 
+ 			int var7;
+ 			for(var7 = 0; var7 < 2; ++var7) {
 @@ -137,8 +138,13 @@
  		}
  	}
@@ -8850,7 +9551,16 @@
  			this.mc.ingameGUI.renderGameOverlay(var1);
  		} else {
  			GL11.glViewport(0, 0, this.mc.displayWidth, this.mc.displayHeight);
-@@ -243,7 +244,7 @@
+@@ -197,6 +198,8 @@
+ 			this.mc.currentScreen.drawScreen(var5, var6, var1);
+ 		}
+ 
++		this.mc.ingameGUI.drawAutosaveIndicator();
++
+ 		Thread.yield();
+ 		Display.update();
+ 	}
+@@ -243,7 +246,7 @@
  							this.updateFogColor(0.0F);
  							GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_COLOR_BUFFER_BIT);
  							GL11.glEnable(GL11.GL_CULL_FACE);
@@ -8859,7 +9569,7 @@
  							GL11.glMatrixMode(GL11.GL_PROJECTION);
  							GL11.glLoadIdentity();
  							GL11.glOrtho(0.0D, (double)this.mc.displayWidth, 0.0D, (double)this.mc.displayHeight, 10.0D, 10000.0D);
-@@ -278,8 +279,8 @@
+@@ -278,8 +281,8 @@
  							GL11.glTranslatef((float)(-var16.width) / 2.0F, (float)(-var16.height) / 2.0F, (float)(-var16.length) / 2.0F);
  							IsomCamera var24 = new IsomCamera();
  							this.mc.renderGlobal.clipRenderersByFrustrum(var24);
@@ -8870,7 +9580,19 @@
  							GL11.glEnable(GL11.GL_FOG);
  							GL11.glFogi(GL11.GL_FOG_MODE, GL11.GL_LINEAR);
  							float var23 = (float)var16.height * 8.0F;
-@@ -304,7 +305,7 @@
+@@ -293,6 +296,11 @@
+ 							var17.oobGroundRenderer();
+ 							if(var16.cloudHeight < var16.height) {
+ 								var17.renderSky(0.0F);
++								GL11.glFogf(GL11.GL_FOG_START, 10000.0F - var23 * 2.0F);
++								GL11.glFogf(GL11.GL_FOG_END, 10000.0F + var23 * 16.0F);
++								var17.renderClouds(0.0F);
++								GL11.glFogf(GL11.GL_FOG_START, 5000.0F - var23);
++								GL11.glFogf(GL11.GL_FOG_END, 5000.0F + var23 * 8.0F);
+ 							}
+ 
+ 							GL11.glEnable(GL11.GL_BLEND);
+@@ -304,7 +312,7 @@
  								var17.renderAllRenderLists();
  							}
  
@@ -8879,7 +9601,7 @@
  								var17.oobWaterRenderer();
  							}
  
-@@ -351,7 +352,7 @@
+@@ -351,7 +359,7 @@
  		return var3;
  	}
  
@@ -8888,16 +9610,24 @@
  		EntityRenderer var7 = this;
  		EntityPlayerSP var9 = this.mc.thePlayer;
  		float var2 = var9.prevRotationPitch + (var9.rotationPitch - var9.prevRotationPitch) * var1;
-@@ -424,7 +425,7 @@
+@@ -424,7 +432,7 @@
  			GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT | GL11.GL_COLOR_BUFFER_BIT);
  			GL11.glEnable(GL11.GL_CULL_FACE);
  			float var27 = var1;
 -			this.farPlaneDistance = (float)(512 >> (this.mc.options.renderDistance << 1));
-+			this.farPlaneDistance = (float)(this.mc.options.getRenderDistance());
++			this.farPlaneDistance = (float)(this.mc.options.getRenderDistance()) * 2.0F;
  			GL11.glMatrixMode(GL11.GL_PROJECTION);
  			GL11.glLoadIdentity();
  			if(this.mc.options.anaglyph) {
-@@ -467,6 +468,12 @@
+@@ -459,6 +467,7 @@
+ 			var13 = var34.prevPosX + (var34.posX - var34.prevPosX) * var1;
+ 			var14 = var34.prevPosY + (var34.posY - var34.prevPosY) * var1;
+ 			var15 = var34.prevPosZ + (var34.posZ - var34.prevPosZ) * var1;
++			boolean outOfBounds = var13 < 0.0F || var13 > var4.width || var15 < 0.0F || var15 > var4.length || this.mc.options.thirdPersonView;
+ 			if(!this.mc.options.thirdPersonView) {
+ 				GL11.glTranslatef(0.0F, 0.0F, -0.1F);
+ 			} else {
+@@ -467,6 +476,12 @@
  				var17 = MathHelper.cos(var34.rotationYaw / 180.0F * (float)Math.PI) * MathHelper.cos(var34.rotationPitch / 180.0F * (float)Math.PI) * 4.0F;
  				var18 = -MathHelper.sin(var34.rotationPitch / 180.0F * (float)Math.PI) * 4.0F;
  
@@ -8910,7 +9640,7 @@
  				for(int var39 = 0; var39 < 8; ++var39) {
  					var20 = (float)(((var39 & 1) << 1) - 1);
  					var27 = (float)(((var39 >> 1 & 1) << 1) - 1);
-@@ -474,7 +481,12 @@
+@@ -474,7 +489,12 @@
  					var20 *= 0.1F;
  					var27 *= 0.1F;
  					var28 *= 0.1F;
@@ -8924,7 +9654,7 @@
  					if(var42 != null) {
  						float var40 = var42.hitVec.distance(new Vec3D(var13, var14, var15));
  						if(var40 < var16) {
-@@ -486,18 +498,30 @@
+@@ -486,18 +506,54 @@
  				GL11.glTranslatef(0.0F, 0.0F, -var16);
  			}
  
@@ -8944,8 +9674,32 @@
 -			this.setupFog();
 +			this.setupFog(var1);
  			GL11.glEnable(GL11.GL_FOG);
++			GL11.glEnable(GL11.GL_ALPHA_TEST);
++			GL11.glEnable(GL11.GL_DEPTH_TEST);
  			var5.renderSky(var1);
 -			this.setupFog();
++			if (!outOfBounds) {
++				GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
++				var5.oobGroundRenderer();
++				if(this.mc.theWorld.defaultFluid > 0) {
++					var5.oobWaterRenderer();
++				}
++			}
++
++			if (!outOfBounds) {
++				GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
++			}
++			var5.renderClouds(var1);
++			GL11.glDisable(GL11.GL_ALPHA_TEST);
++			GL11.glDisable(GL11.GL_DEPTH_TEST);
++			GL11.glEnable(GL11.GL_BLEND);
++			GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
++			var5.oobHorizonRender(var1);
++			GL11.glDisable(GL11.GL_BLEND);
++			GL11.glEnable(GL11.GL_FOG);
++			this.setupFog(var1);
++			GL11.glEnable(GL11.GL_ALPHA_TEST);
++			GL11.glEnable(GL11.GL_DEPTH_TEST);
 +			this.setupFog(var1);
  			Frustrum var26 = new Frustrum();
  			this.mc.renderGlobal.clipRenderersByFrustrum(var26);
@@ -8961,7 +9715,7 @@
  			GL11.glEnable(GL11.GL_FOG);
  			GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/terrain.png"));
  			RenderHelper.disableStandardItemLighting();
-@@ -525,9 +549,8 @@
+@@ -525,9 +581,8 @@
  			var5.renderEntities(this.orientCamera(var1), var26, var1);
  			var6.renderLitParticles(var1);
  			RenderHelper.disableStandardItemLighting();
@@ -8972,39 +9726,26 @@
  			if(this.mc.objectMouseOver != null && var3.isInsideOfWater()) {
  				GL11.glDisable(GL11.GL_ALPHA_TEST);
  				var5.drawBlockBreaking(this.mc.objectMouseOver, 0, var3.inventory.getCurrentItem());
-@@ -535,9 +558,13 @@
+@@ -535,9 +590,16 @@
  				GL11.glEnable(GL11.GL_ALPHA_TEST);
  			}
  
 +			this.setupFog(var1);
-+
-+			var5.oobGroundRenderer();
  			GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 -			this.setupFog();
 -			var5.oobWaterRenderer();
-+			if(this.mc.theWorld.defaultFluid > 0) {
-+				var5.oobWaterRenderer();
++			if (outOfBounds) {
++				var5.oobGroundRenderer();
++				if(this.mc.theWorld.defaultFluid > 0) {
++					var5.oobWaterRenderer();
++				}
 +			}
++
++			GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/terrain.png"));
  			GL11.glEnable(GL11.GL_BLEND);
  			GL11.glDisable(GL11.GL_CULL_FACE);
  			GL11.glColorMask(false, false, false, false);
-@@ -555,6 +582,15 @@
- 				var5.renderAllRenderLists();
- 			}
- 
-+			GL11.glDisable(GL11.GL_ALPHA_TEST);
-+			GL11.glEnable(GL11.GL_BLEND);
-+			GL11.glDisable(GL11.GL_FOG);
-+			var5.oobHorizonRender(var1);
-+			GL11.glDisable(GL11.GL_BLEND);
-+			GL11.glEnable(GL11.GL_FOG);
-+			this.setupFog(var1);
-+			GL11.glEnable(GL11.GL_ALPHA_TEST);
-+
- 			GL11.glDepthMask(true);
- 			GL11.glEnable(GL11.GL_CULL_FACE);
- 			GL11.glDisable(GL11.GL_BLEND);
-@@ -565,6 +601,10 @@
+@@ -565,6 +627,10 @@
  				GL11.glEnable(GL11.GL_ALPHA_TEST);
  			}
  
@@ -9015,7 +9756,7 @@
  			GL11.glDisable(GL11.GL_FOG);
  			GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
  			GL11.glLoadIdentity();
-@@ -578,7 +618,7 @@
+@@ -578,7 +644,7 @@
  				this.setupViewBobbing(var1);
  			}
  
@@ -9024,7 +9765,7 @@
  				this.itemRenderer.renderItemInFirstPerson(var1);
  			}
  
-@@ -616,7 +656,7 @@
+@@ -616,7 +682,7 @@
  	private void updateFogColor(float var1) {
  		World var2 = this.mc.theWorld;
  		EntityPlayerSP var3 = this.mc.thePlayer;
@@ -9033,7 +9774,7 @@
  		var4 = 1.0F - (float)Math.pow((double)var4, 0.25D);
  		Vec3D var5 = var2.getSkyColor(var1);
  		float var6 = var5.xCoord;
-@@ -659,7 +699,7 @@
+@@ -659,7 +725,7 @@
  		GL11.glClearColor(this.fogColorRed, this.fogColorGreen, this.fogColorBlue, 0.0F);
  	}
  
@@ -9042,11 +9783,11 @@
  		World var1 = this.mc.theWorld;
  		EntityPlayerSP var2 = this.mc.thePlayer;
  		int var10000 = GL11.GL_FOG_COLOR;
-@@ -683,12 +723,81 @@
+@@ -683,12 +749,81 @@
  				GL11.glFogf(GL11.GL_FOG_DENSITY, 2.0F);
  			}
  		} else {
-+			float dist = this.farPlaneDistance;
++			float dist = this.farPlaneDistance / 2.0F;
 +			dist *= 1.0F - this.mc.thePlayer.getTravelDistance(f);
  			GL11.glFogi(GL11.GL_FOG_MODE, GL11.GL_LINEAR);
 -			GL11.glFogf(GL11.GL_FOG_START, this.farPlaneDistance / 4.0F);
@@ -9175,7 +9916,16 @@
 +}
 --- net/minecraft/client/render/entity/RenderItem.java
 +++ net/minecraft/client/render/entity/RenderItem.java
-@@ -24,7 +24,7 @@
+@@ -13,6 +13,8 @@
+ import util.MathHelper;
+ 
+ public final class RenderItem extends Render {
++	public static final RenderItem instance = new RenderItem();
++
+ 	private RenderBlocks renderBlocks = new RenderBlocks();
+ 	private Random random = new Random();
+ 
+@@ -24,7 +26,7 @@
  	public final void renderItemIntoGUI(RenderEngine var1, ItemStack var2, int var3, int var4) {
  		if(var2 != null) {
  			int var9;
@@ -9184,7 +9934,7 @@
  				var9 = var2.itemID;
  				RenderEngine.bindTexture(var1.getTexture("/terrain.png"));
  				Block var8 = Block.blocksList[var9];
-@@ -35,10 +35,10 @@
+@@ -35,10 +37,10 @@
  				GL11.glRotatef(210.0F, 1.0F, 0.0F, 0.0F);
  				GL11.glRotatef(45.0F, 0.0F, 1.0F, 0.0F);
  				GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
@@ -9197,7 +9947,7 @@
  					GL11.glDisable(GL11.GL_LIGHTING);
  					if(var2.itemID < 256) {
  						RenderEngine.bindTexture(var1.getTexture("/terrain.png"));
-@@ -48,8 +48,8 @@
+@@ -48,8 +50,8 @@
  
  					int var10000 = var3;
  					int var10001 = var4;
@@ -9208,7 +9958,7 @@
  					boolean var6 = true;
  					var6 = true;
  					var4 = var10003;
-@@ -81,7 +81,7 @@
+@@ -81,7 +83,7 @@
  				GL11.glEnable(GL11.GL_DEPTH_TEST);
  			}
  
@@ -9217,7 +9967,7 @@
  				int var9 = 13 - var2.itemDamage * 13 / var2.isItemStackDamageable();
  				int var7 = 255 - var2.itemDamage * 255 / var2.isItemStackDamageable();
  				GL11.glDisable(GL11.GL_LIGHTING);
-@@ -135,13 +135,10 @@
+@@ -135,13 +137,10 @@
  
  		GL11.glTranslatef(var2, var3 + var8, var4);
  		GL11.glEnable(GL11.GL_NORMALIZE);
@@ -9232,7 +9982,7 @@
  
  			GL11.glScalef(var2, var2, var2);
  
-@@ -154,12 +151,12 @@
+@@ -154,12 +153,12 @@
  					GL11.glTranslatef(var4, var5, var6);
  				}
  
@@ -9260,7 +10010,7 @@
  		super(var1, 3, var2, blocksEffectiveAgainst);
 --- net/minecraft/client/gui/GuiButton.java
 +++ net/minecraft/client/gui/GuiButton.java
-@@ -4,50 +4,69 @@
+@@ -4,50 +4,70 @@
  import org.lwjgl.opengl.GL11;
  
  public class GuiButton extends Gui {
@@ -9332,11 +10082,12 @@
 +			boolean var5 = var2 >= this.xPosition && var3 >= this.yPosition && var2 < this.xPosition + this.width && var3 < this.yPosition + this.height;
 +			byte var6 = this.getHoverState(var5);
 +			if (this.bg != 2) {
-+				if (this.bg == 1 || var1.theWorld == null) {
++				boolean menuBg = this.bg == 1 || var1.theWorld == null && this.bg != 3;
++				if (menuBg) {
 +					GL11.glEnable(GL11.GL_BLEND);
 +					GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
 +				}
-+				GL11.glBindTexture(GL11.GL_TEXTURE_2D, var1.renderEngine.getTexture(var1.theWorld == null || this.bg == 1 ? "/gui/guimenu.png" : "/gui/gui.png"));
++				GL11.glBindTexture(GL11.GL_TEXTURE_2D, var1.renderEngine.getTexture(menuBg ? "/gui/guimenu.png" : "/gui/gui.png"));
 +				GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 +				this.drawTexturedModalRect(this.xPosition, this.yPosition, 0, 46 + var6 * 20, this.width / 2, this.height);
 +				this.drawTexturedModalRect(this.xPosition + this.width / 2, this.yPosition, 200 - this.width / 2, 46 + var6 * 20, this.width / 2, this.height);
@@ -9352,7 +10103,7 @@
  				drawCenteredString(var4, this.displayString, this.xPosition + this.width / 2, this.yPosition + (this.height - 8) / 2, 16777120);
  			} else {
  				drawCenteredString(var4, this.displayString, this.xPosition + this.width / 2, this.yPosition + (this.height - 8) / 2, 14737632);
-@@ -55,7 +74,13 @@
+@@ -55,7 +75,13 @@
  		}
  	}
  
@@ -9599,8 +10350,12 @@
  		int var2 = 0;
  
  		while(true) {
-@@ -186,7 +180,7 @@
- 						var5 = this.getFirstUncoveredBlock(var3, var4) + 1;
+@@ -183,10 +177,10 @@
+ 						++var2;
+ 						var3 = var1.nextInt(this.width / 2) + this.width / 4;
+ 						var4 = var1.nextInt(this.length / 2) + this.length / 4;
+-						var5 = this.getFirstUncoveredBlock(var3, var4) + 1;
++						var5 = Math.max(this.getFirstUncoveredBlock(var3, var4) + 1, 3);
  						if(var2 == 1000000) {
  							this.xSpawn = var3;
 -							this.ySpawn = this.height + 100;
@@ -10515,7 +11270,7 @@
  	public void sendBlockRemoving(int var1, int var2, int var3, int var4) {
 --- /dev/null
 +++ net/minecraft/game/item/ItemBucket.java
-@@ -1,0 +1,91 @@
+@@ -1,0 +1,90 @@
 +package net.minecraft.game.item;
 +
 +import net.minecraft.game.entity.player.EntityPlayer;
@@ -10532,7 +11287,6 @@
 +	public ItemBucket(int var1, int var2) {
 +		super(var1);
 +		this.maxStackSize = 1;
-+		this.maxDamage = 64;
 +		this.isFull = var2;
 +	}
 +
@@ -10609,7 +11363,7 @@
 +}
 --- net/minecraft/client/gui/container/GuiContainer.java
 +++ net/minecraft/client/gui/container/GuiContainer.java
-@@ -2,13 +2,17 @@
+@@ -2,27 +2,34 @@
  
  import java.util.ArrayList;
  import java.util.List;
@@ -10627,7 +11381,9 @@
  import org.lwjgl.opengl.GL11;
  
  public abstract class GuiContainer extends GuiScreen {
-@@ -17,12 +21,15 @@
+-	private static RenderItem itemRenderer = new RenderItem();
++	private static RenderItem itemRenderer = RenderItem.instance;
+ 	private ItemStack itemStack = null;
  	protected int xSize = 176;
  	protected int ySize = 166;
  	protected List inventorySlots = new ArrayList();
@@ -11247,38 +12003,39 @@
  	}
 --- /dev/null
 +++ net/minecraft/client/ThreadSaveLevel.java
-@@ -1,0 +1,88 @@
+@@ -1,0 +1,105 @@
 +package net.minecraft.client;
 +
 +import com.mojang.nbt.NBTBase;
 +import com.mojang.nbt.NBTTagCompound;
 +
-+import java.io.Closeable;
-+import java.io.DataOutput;
-+import java.io.IOException;
++import java.io.DataOutputStream;
++import java.io.File;
++import java.nio.file.Files;
 +import java.util.concurrent.BlockingQueue;
 +import java.util.concurrent.LinkedBlockingQueue;
++import java.util.zip.GZIPOutputStream;
 +
 +public class ThreadSaveLevel extends Thread {
 +    private static ThreadSaveLevel instance;
 +
 +    private final BlockingQueue<WorldSaveInfo> saveQueue = new LinkedBlockingQueue<>();
 +    private final Minecraft mc;
-+    private volatile boolean busy = false;
++    private volatile WorldSaveInfo busySave;
 +
 +    public ThreadSaveLevel(Minecraft mc) {
 +        this.mc = mc;
 +    }
 +
 +    public void run() {
-+        while (true) {
-+            try {
-+                this.busy = false;
-+                WorldSaveInfo save = saveQueue.take();
-+                this.busy = true;
++        try {
++            while (true) {
++                WorldSaveInfo save = this.busySave = saveQueue.take();
 +
-+                try {
-+                    NBTBase.writeTag(save.data, save.stream);
++                try(DataOutputStream stream = new DataOutputStream(
++                        new GZIPOutputStream(
++                                Files.newOutputStream(save.file.toPath())))) {
++                    NBTBase.writeTag(save.data, stream);
 +                    try {
 +                        save.onSave.run();
 +                    } catch (Exception e) {
@@ -11292,24 +12049,15 @@
 +                    e.printStackTrace();
 +                }
 +
-+                if (save.stream instanceof Closeable) {
-+                    try {
-+                        ((Closeable) save.stream).close();
-+                    } catch (Exception e) {
-+                        mc.ingameGUI.sendChatMessage("&cFailed to close file stream!");
-+                        System.err.println("Error closing data stream!");
-+                        e.printStackTrace();
-+                    }
-+                }
-+            } catch (InterruptedException e) {
-+                break;
++                this.busySave = null;
 +            }
++        } catch (InterruptedException ignored) {
 +        }
-+        this.busy = false;
++        this.busySave = null;
 +    }
 +
-+    public static void queue(NBTTagCompound data, DataOutput stream, Runnable onSave) throws InterruptedException {
-+        instance.saveQueue.put(new WorldSaveInfo(data, stream, onSave));
++    public static void queue(NBTTagCompound data, File file, Runnable onSave) throws InterruptedException {
++        instance.saveQueue.add(new WorldSaveInfo(data, file, onSave));
 +    }
 +
 +    public static void init(Minecraft mc) {
@@ -11321,17 +12069,42 @@
 +    }
 +
 +    public static boolean isBusy() {
-+        return instance.isAlive() && instance.busy;
++        return instance.isAlive() && instance.busySave != null;
++    }
++
++    public static boolean isBusyWithFile(File file) {
++        if (!instance.isAlive()) return false;
++        WorldSaveInfo busySave = instance.busySave;
++        return busySave != null && isSameBusyFile(busySave.file, file)
++                || instance.saveQueue.stream().anyMatch(i -> isSameBusyFile(i.file, file));
++    }
++
++    private static boolean isSameBusyFile(File a, File b) {
++        String aName = a.getName();
++        int aExtStart = aName.indexOf('.');
++        if (aExtStart != -1) {
++            aName = aName.substring(0, aExtStart);
++        }
++        a = new File(a.getParent(), aName);
++
++        String bName = b.getName();
++        int bExtStart = bName.indexOf('.');
++        if (bExtStart != -1) {
++            bName = bName.substring(0, bExtStart);
++        }
++        b = new File(b.getParent(), bName);
++
++        return a.equals(b);
 +    }
 +
 +    private static class WorldSaveInfo {
 +        public final NBTTagCompound data;
-+        public final DataOutput stream;
++        public final File file;
 +        public final Runnable onSave;
 +
-+        private WorldSaveInfo(NBTTagCompound data, DataOutput stream, Runnable onSave) {
++        private WorldSaveInfo(NBTTagCompound data, File file, Runnable onSave) {
 +            this.data = data;
-+            this.stream = stream;
++            this.file = file;
 +            this.onSave = onSave;
 +        }
 +    }
@@ -11466,6 +12239,38 @@
 +		return Math.max(x, z);
  	}
  }
+--- /dev/null
++++ net/minecraft/client/gui/GuiAutosaveInfo.java
+@@ -1,0 +1,29 @@
++package net.minecraft.client.gui;
++
++import net.minecraft.client.GuiMainMenu;
++import org.lwjgl.opengl.GL11;
++
++public class GuiAutosaveInfo extends GuiScreen {
++    public void initGui() {
++        this.controlList.add(new GuiButton(0, this.width / 2 - 100, this.height / 2 + 50, "OK").withBg(3));
++    }
++
++    public void drawScreen(int var1, int var2, float var3) {
++        this.drawDefaultBackground();
++        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/dirt.png"));
++        drawGradientRect(this.width / 2 - 121, this.height / 2 - 81, this.width / 2 + 121, this.height / 2 + 91, 0xFFAAAAAA, 0xFFAAAAAA);
++        GL11.glColor4f(0.5F, 0.5F, 0.5F, 1.0F);
++        this.drawTexturedModalRect(this.width / 2 - 120, this.height / 2 - 80, 0, 0, 240, 170, 32);
++        GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
++        this.drawAutosaveIcon(this.mc, this.width / 2, this.height / 2 - 45);
++        drawString(this.fontRenderer, "When you see this icon above displayed,", this.width / 2 - 100, this.height / 2 - 22, 0xFFFFFF);
++        drawString(this.fontRenderer, "the game is saving your data.", this.width / 2 - 100, this.height / 2 - 10, 0xFFFFFF);
++        drawString(this.fontRenderer, "Please do not close the game", this.width / 2 - 100, this.height / 2 + 10, 0xFFFFFF);
++        drawString(this.fontRenderer, "while this icon is on-screen.", this.width / 2 - 100, this.height / 2 + 22, 0xFFFFFF);
++        super.drawScreen(var1, var2, var3);
++    }
++
++    protected void actionPerformed(GuiButton var1) {
++        this.mc.displayGuiScreen(new GuiMainMenu());
++    }
++}
 --- com/mojang/nbt/NBTTagCompound.java
 +++ com/mojang/nbt/NBTTagCompound.java
 @@ -70,6 +70,10 @@
@@ -11652,7 +12457,7 @@
 +}
 --- /dev/null
 +++ net/minecraft/game/level/WorldInfo.java
-@@ -1,0 +1,48 @@
+@@ -1,0 +1,57 @@
 +package net.minecraft.game.level;
 +
 +import com.mojang.nbt.NBTTagCompound;
@@ -11669,6 +12474,9 @@
 +	public LevelType levelType;
 +	public LevelTheme levelTheme;
 +	public LevelStructure levelStructure;
++	public LevelType currentLevelType;
++	public LevelTheme currentLevelTheme;
++	public LevelStructure currentLevelStructure;
 +	public int worldTime;
 +	public int playerScore;
 +	public boolean creative;
@@ -11682,6 +12490,9 @@
 +		this.levelType = LevelType.fromNameNullable(nbt.getString("LevelType"));
 +		this.levelTheme = LevelTheme.fromNameNullable(nbt.getString("LevelTheme"));
 +		this.levelStructure = LevelStructure.fromNameNullable(nbt.getString("LevelStructure"));
++		this.currentLevelType = LevelType.fromName(nbt.getString("CurrentLevelType"));
++		this.currentLevelTheme = LevelTheme.fromName(nbt.getString("CurrentLevelTheme"));
++		this.currentLevelStructure = LevelStructure.fromName(nbt.getString("CurrentLevelStructure"));
 +		this.worldTime = nbt.getInteger("WorldTime");
 +		this.playerScore = nbt.getInteger("PlayerScore");
 +		this.creative = nbt.getBoolean("Creative");
@@ -11699,6 +12510,9 @@
 +		if (this.levelType != null) nbt.setString("LevelType", this.levelType.toString());
 +		if (this.levelTheme != null) nbt.setString("LevelTheme", this.levelTheme.toString());
 +		if (this.levelStructure != null) nbt.setString("LevelStructure", this.levelStructure.toString());
++		if (this.currentLevelType != null) nbt.setString("CurrentLevelType", this.currentLevelType.toString());
++		if (this.currentLevelTheme != null) nbt.setString("CurrentLevelTheme", this.currentLevelTheme.toString());
++		if (this.currentLevelStructure != null) nbt.setString("CurrentLevelStructure", this.currentLevelStructure.toString());
 +	}
 +}
 --- /dev/null
@@ -11733,14 +12547,20 @@
 +}
 --- net/minecraft/game/level/LevelLoader.java
 +++ net/minecraft/game/level/LevelLoader.java
-@@ -1,6 +1,5 @@
+@@ -1,16 +1,15 @@
  package net.minecraft.game.level;
  
 -import com.mojang.nbt.NBTBase;
  import com.mojang.nbt.NBTTagCompound;
  import com.mojang.nbt.NBTTagList;
  import com.mojang.nbt.NBTTagShort;
-@@ -11,6 +10,7 @@
+-import java.io.DataOutputStream;
+-import java.io.IOException;
+-import java.io.InputStream;
+-import java.io.OutputStream;
++
++import java.io.*;
++import java.nio.file.Files;
  import java.util.Iterator;
  import java.util.zip.GZIPOutputStream;
  import net.minecraft.client.LoadingScreenRenderer;
@@ -11748,7 +12568,7 @@
  import net.minecraft.game.entity.Entity;
  import net.minecraft.game.entity.EntityPainting;
  import net.minecraft.game.entity.animal.EntityPig;
-@@ -25,6 +25,9 @@
+@@ -25,6 +24,9 @@
  import net.minecraft.game.level.block.tileentity.TileEntity;
  import net.minecraft.game.level.block.tileentity.TileEntityChest;
  import net.minecraft.game.level.block.tileentity.TileEntityFurnace;
@@ -11758,7 +12578,7 @@
  import util.IProgressUpdate;
  
  public abstract class LevelLoader {
-@@ -63,6 +66,7 @@
+@@ -63,6 +65,7 @@
  		var9.authorName = var2.getString("Author");
  		var9.name = var2.getString("Name");
  		var9.createTime = var2.getLong("CreatedOn");
@@ -11766,7 +12586,7 @@
  		var9.cloudColor = var4.getInteger("CloudColor");
  		var9.skyColor = var4.getInteger("SkyColor");
  		var9.fogColor = var4.getInteger("FogColor");
-@@ -81,7 +85,10 @@
+@@ -81,7 +84,10 @@
  		var9.defaultFluid = var4.getByte("SurroundingWaterType");
  		var9.worldTime = var4.getShort("TimeOfDay");
  		var9.skylightSubtracted = var9.getSkyBrightness();
@@ -11778,18 +12598,20 @@
  		if(this.guiLoading != null) {
  			this.guiLoading.displayLoadingString("Preparing entities..");
  		}
-@@ -134,6 +141,10 @@
+@@ -133,7 +139,11 @@
+ 		return (Entity)(var2.equals("Pig") ? new EntityPig(var1) : (var2.equals("Sheep") ? new EntitySheep(var1) : (var2.equals("Creeper") ? new EntityCreeper(var1) : (var2.equals("Skeleton") ? new EntitySkeleton(var1) : (var2.equals("Spider") ? new EntitySpider(var1) : (var2.equals("Zombie") ? new EntityZombie(var1) : (var2.equals("Giant") ? new EntityGiantZombie(var1) : (var2.equals("Item") ? new EntityItem(var1) : (var2.equals("Painting") ? new EntityPainting(var1) : null)))))))));
  	}
  
- 	public final void save(World var1, OutputStream var2) throws IOException {
+-	public final void save(World var1, OutputStream var2) throws IOException {
++	public final void save(World var1, File var2) throws IOException {
 +		this.save(var1, var2, () -> {});
 +	}
 +
-+	public final void save(World var1, OutputStream var2, Runnable onSave) throws IOException {
++	public final void save(World var1, File var2, Runnable onSave) throws IOException {
  		if(this.guiLoading != null) {
  			this.guiLoading.displayProgressMessage("Saving level");
  		}
-@@ -153,12 +164,17 @@
+@@ -153,12 +163,17 @@
  		var3.setByte("SurroundingGroundType", (byte)Block.grass.blockID);
  		var3.setByte("SurroundingWaterType", (byte)var1.defaultFluid);
  		var3.setShort("TimeOfDay", (short)var1.worldTime);
@@ -11807,7 +12629,7 @@
  		NBTTagList var5 = new NBTTagList();
  		var5.setTag(new NBTTagShort((short)var1.xSpawn));
  		var5.setTag(new NBTTagShort((short)var1.ySpawn));
-@@ -168,6 +184,7 @@
+@@ -168,6 +183,7 @@
  		var15.setString("Author", var1.authorName);
  		var15.setString("Name", var1.name);
  		var15.setLong("CreatedOn", var1.createTime);
@@ -11815,26 +12637,22 @@
  		if(this.guiLoading != null) {
  			this.guiLoading.displayLoadingString("Preparing entities..");
  		}
-@@ -209,12 +226,18 @@
+@@ -207,14 +223,10 @@
+ 			this.guiLoading.displayLoadingString("Writing..");
+ 		}
  
- 		NBTTagCompound var13 = var18;
- 		DataOutputStream var14 = new DataOutputStream(new GZIPOutputStream(var2));
+-		NBTTagCompound var13 = var18;
+-		DataOutputStream var14 = new DataOutputStream(new GZIPOutputStream(var2));
 -
  		try {
 -			NBTBase.writeTag(var13, var14);
 -		} finally {
-+			ThreadSaveLevel.queue(var13, var14, onSave);
+-			var14.close();
++			ThreadSaveLevel.queue(var18, var2, onSave);
 +		} catch (InterruptedException e) {
 +			System.err.println("Threading stuff acted up. Could not save!");
- 			var14.close();
  		}
-+
-+//		try {
-+//			NBTBase.writeTag(var13, var14);
-+//		} finally {
-+//			var14.close();
-+//		}
- 
+-
  	}
  }
 --- /dev/null
@@ -12472,6 +13290,761 @@
 +        TOOLTIPS[347] = "Brick";
 +    }
 +}
+--- /dev/null
++++ net/minecraft/client/gui/GuiFileSelection.java
+@@ -1,0 +1,752 @@
++package net.minecraft.client.gui;
++
++import net.minecraft.client.ThreadSaveLevel;
++import net.minecraft.game.level.block.Block;
++import net.minecraft.game.level.block.BlockFlower;
++import net.minecraft.game.level.generator.LevelStructure;
++import net.minecraft.game.level.generator.LevelTheme;
++import net.minecraft.game.level.generator.LevelType;
++import net.minecraft.game.level.material.Material;
++import org.lwjgl.opengl.GL11;
++import util.MathHelper;
++
++import java.io.File;
++import java.io.FilenameFilter;
++import java.text.SimpleDateFormat;
++import java.util.*;
++import java.util.concurrent.BlockingQueue;
++import java.util.concurrent.PriorityBlockingQueue;
++import java.util.function.Consumer;
++import java.util.function.Function;
++import java.util.function.Predicate;
++
++public class GuiFileSelection extends GuiScreen {
++    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm");
++
++    private final GuiScreen parent;
++    private final File directory;
++    private final String title;
++    private final Function<File, FileInfo> infoProvider;
++
++    private Consumer<File> callbackExisting;
++    private Consumer<String> callbackNonExisting;
++    private Consumer<File> callbackDeletion;
++    private FilenameFilter filenameFilter;
++    private String nonExistingTitle;
++    private Predicate<String> inputValidifier = s -> true;
++
++    private ThreadProvideFileInfo infoProviderThread;
++    private File[] files = null;
++    private File selection = null;
++    private int scroll;
++    private int maxScroll;
++    private float prevSmoothScroll;
++    private float smoothScroll;
++    private boolean deleting;
++
++    public GuiFileSelection(GuiScreen parent, File directory, String title, Function<File, FileInfo> infoProvider) {
++        this.parent = parent;
++        this.directory = directory;
++        this.title = title;
++        this.nonExistingTitle = title;
++        this.infoProvider = infoProvider;
++    }
++
++    public GuiFileSelection callbackExisting(Consumer<File> callbackExisting) {
++        this.callbackExisting = callbackExisting;
++        return this;
++    }
++
++    public GuiFileSelection callbackNonExisting(Consumer<String> callbackNonExisting) {
++        this.callbackNonExisting = callbackNonExisting;
++        return this;
++    }
++
++    public GuiFileSelection callbackDeletion(Consumer<File> callbackDeletion) {
++        this.callbackDeletion = callbackDeletion;
++        return this;
++    }
++
++    public GuiFileSelection filenameFilter(FilenameFilter filenameFilter) {
++        this.filenameFilter = filenameFilter;
++        return this;
++    }
++
++    public GuiFileSelection nonExistingTitle(String nonExistingTitle) {
++        this.nonExistingTitle = nonExistingTitle;
++        return this;
++    }
++
++    public GuiFileSelection inputValidifier(Predicate<String> inputValidifier) {
++        this.inputValidifier = inputValidifier;
++        return this;
++    }
++
++    public void initGui() {
++        if (this.directory.isDirectory()) {
++            this.files = this.directory.listFiles(this.filenameFilter);
++            if (this.files != null) {
++                Arrays.sort(this.files);
++                if (this.infoProviderThread == null) {
++                    this.infoProviderThread = new ThreadProvideFileInfo(this.infoProvider);
++                    for (File file : this.files) {
++                        this.infoProviderThread.getFileInfo(file);
++                    }
++                    this.infoProviderThread.start();
++                }
++            }
++        }
++
++        this.controlList.add(new GuiButton(0, this.width / 2 - 155, this.height - 25, 100, 20, "Back"));
++        this.controlList.add(new GuiButton(1, this.width / 2 - 50, this.height - 25, 100, 20, "Create New"));
++        this.controlList.add(new GuiButton(2, this.width / 2 + 55, this.height - 25, 100, 20, "Deleting: " + (this.deleting ? "ON" : "OFF")));
++        this.controlList.add(new GuiButton(3, this.width / 2 - 70, 5, 20, 20, "^"));
++        this.controlList.add(new GuiButton(4, this.width / 2 + 50, 5, 20, 20, "v"));
++    }
++
++    public void updateScreen() {
++        this.prevSmoothScroll = this.smoothScroll;
++        this.smoothScroll = MathHelper.lerp(this.smoothScroll, this.scroll, 0.5F);
++        this.mc.renderEngine.updateDynamicTextures();
++    }
++
++    public void drawScreen(int var1, int var2, float var3) {
++        this.selection = null;
++        int scroll = (int)MathHelper.lerp(this.prevSmoothScroll, this.smoothScroll, var3);
++
++        int headerHeight = 30;
++        int headerHeightScaled = this.mc.displayHeight / this.height * headerHeight;
++        this.drawDefaultBackground();
++        if (this.deleting) {
++            drawGradientRect(0, 0, this.width, this.height, 0x3FFF0000, 0x3FFF0000);
++        }
++        drawGradientRect(0, 0, this.width, headerHeight, 0x7F000000, 0x7F000000);
++        drawGradientRect(0, this.height - headerHeight, this.width, this.height, 0x7F000000, 0x7F000000);
++        super.drawScreen(var1, var2, var3);
++        drawCenteredString(this.fontRenderer, this.title, this.width / 2, 10, 0xFFFFFF);
++
++        if (this.files != null && this.files.length > 0) {
++            int height = 40;
++            int padding = 10;
++            int wf = 5;
++            this.maxScroll = this.files.length * (height + padding) + padding;
++            GL11.glEnable(GL11.GL_SCISSOR_TEST);
++            GL11.glScissor(0, headerHeightScaled, this.mc.displayWidth, this.mc.displayHeight - headerHeightScaled * 2);
++            for (int i = 0; i < this.files.length; i++) {
++                int offsetY = i * (height + padding) + padding + headerHeight - scroll;
++                if (offsetY + height < headerHeight || offsetY > this.height - headerHeight) continue;
++
++                File file = this.files[i];
++                FileInfo fi = this.infoProviderThread != null ? this.infoProviderThread.getFileInfo(file) : null;
++
++                int backColor = 0x7F000000;
++                boolean hovered = false;
++                if (var1 > this.width / wf && var1 < this.width * (wf - 1) / wf
++                        && var2 > headerHeight && var2 < this.height - headerHeight
++                        && var2 > offsetY && var2 < offsetY + height) {
++                    this.selection = file;
++                    int borderColor = 0xFFFFFFFF;
++                    backColor = deleting ? 0x7F7F0000 : 0x7F30396E;
++                    hovered = true;
++                    drawGradientRect(this.width / wf - 1, offsetY - 1, this.width / wf, offsetY + height + 1, borderColor, borderColor);
++                    drawGradientRect(this.width * (wf - 1) / wf, offsetY - 1, this.width * (wf - 1) / wf + 1, offsetY + height + 1, borderColor, borderColor);
++                    drawGradientRect(this.width / wf, offsetY - 1, this.width * (wf - 1) / wf, offsetY, borderColor, borderColor);
++                    drawGradientRect(this.width / wf, offsetY + height, this.width * (wf - 1) / wf, offsetY + height + 1, borderColor, borderColor);
++                }
++
++                drawGradientRect(this.width / wf, offsetY, this.width * (wf - 1) / wf, offsetY + height, backColor, backColor);
++
++                String time = DATE_FORMAT.format(new Date(fi == null ? file.lastModified() : fi.lastModified));
++                long fileSizeInt = fi != null ? fi.fileSize : file.length();
++                boolean megabytes = fileSizeInt > 1000000;
++                String fileSize = megabytes
++                        ? (double) (fileSizeInt * 10 / 1024 / 1024) / 10.0D + "MB"
++                        : (double) (fileSizeInt * 10 / 1024) / 10.0D + "KB";
++                this.fontRenderer.alpha = 0.5F;
++                GL11.glEnable(GL11.GL_BLEND);
++                this.fontRenderer.drawString(time, this.width * (wf - 1) / wf - 4 - this.fontRenderer.getStringWidth(time), offsetY + 6, 0xFFFFFF);
++                this.fontRenderer.drawString(fileSize, this.width * (wf - 1) / wf - 4 - this.fontRenderer.getStringWidth(fileSize), offsetY + 16, 0xFFFFFF);
++                GL11.glDisable(GL11.GL_BLEND);
++                this.fontRenderer.alpha = 1.0F;
++
++                if (fi != null) {
++                    String description = fi.levelType.prefixThemeName()
++                            ? fi.levelTheme + " " + fi.levelType
++                            : fi.levelType + " " + fi.levelTheme;
++                    if (fi.levelStructure != LevelStructure.NONE) {
++                        description += " + " + fi.levelStructure;
++                    }
++                    drawString(this.fontRenderer, description, this.width / wf + 42, offsetY + 16, 0xCCCCCC);
++
++                    description = (fi.creative ? "Creative" : "Survival") + ", "
++                            + fi.width + "x" + fi.height + "x" + fi.length;
++                    drawString(this.fontRenderer, description, this.width / wf + 42, offsetY + 26, 0xCCCCCC);
++
++                    GL11.glPushMatrix();
++                    GL11.glTranslatef(this.width / wf + 4, offsetY + 4, 0.0F);
++                    GL11.glScalef(0.5F, 0.5F, 0.5F);
++                    this.drawLevelIcon(fi);
++                    GL11.glPopMatrix();
++                } else {
++                    drawString(this.fontRenderer, "Loading...", this.width / wf + 42, offsetY + 16, 0xCCCCCC);
++                    drawGradientRect(this.width / wf + 4, offsetY + 4, this.width / wf + 36, offsetY + 36, 0xFF000000, 0xFF000000);
++                }
++
++                String name = file.getName();
++                int extensionIndex = name.lastIndexOf('.');
++                if (extensionIndex != -1) {
++                    name = name.substring(0, extensionIndex);
++                }
++
++                drawString(this.fontRenderer, name, this.width / wf + 42, offsetY + 6, hovered ? 0xFFFFAA : 0xFFFFFF);
++
++                if (ThreadSaveLevel.isBusyWithFile(file)) {
++                    drawGradientRect(this.width / wf, offsetY, this.width * (wf - 1) / wf, offsetY + height, 0xBF000000, 0xBF000000);
++                    this.drawAutosaveIcon(this.mc, this.width / wf + 20, offsetY + 28);
++                }
++            }
++            GL11.glDisable(GL11.GL_SCISSOR_TEST);
++        } else {
++            drawCenteredString(this.fontRenderer, "Empty!", this.width / 2, this.height / 2 - 4, 0xFFFFFF);
++            this.maxScroll = 0;
++        }
++
++        this.maxScroll -= this.height - headerHeight * 2;
++        this.maxScroll = Math.max(this.maxScroll, 0);
++        this.scroll = Math.min(this.scroll, this.maxScroll);
++    }
++
++    private void drawLevelIcon(FileInfo fileInfo) {
++        LevelType type = fileInfo.levelType;
++        LevelTheme theme = fileInfo.levelTheme;
++
++        int sky = theme.getSkyColor();
++        int fog = theme.getFogColor();
++
++        drawGradientRect(0, 0, 64, 64, 255 << 24 | sky, 255 << 24 | fog);
++
++        Block stone = theme.getStoneBlock();
++        Block soil = theme.getSoilBlock();
++        Block ground = soil == Block.dirt && theme.growGrassOnDirt() ? theme.hasSnow() ? Block.blockSnow : Block.grass : soil;
++        Block sandBeach = theme.getSandBeachBlock();
++        if (sandBeach == null) sandBeach = ground;
++        Block gravelBeach = theme.getGravelBeachBlock();
++        if (gravelBeach == null) gravelBeach = ground;
++        Block liquid = theme.getStillFluid();
++        if (liquid != null && liquid.material == Material.water && theme.hasSnow()) liquid = Block.ice;
++        Block sapling = ground == Block.sand ? Block.cactus
++                : ((BlockFlower)Block.sapling).canThisPlantGrowOnThisBlockID(ground.blockID)
++                    || ((BlockFlower)Block.sapling).canThisPlantGrowOnThisBlockID(sandBeach.blockID)
++                    || ((BlockFlower)Block.sapling).canThisPlantGrowOnThisBlockID(gravelBeach.blockID) ? Block.sapling
++                : null;
++        Block flower = theme.hasSnow()
++                || !(Block.plantRed.canThisPlantGrowOnThisBlockID(ground.blockID)
++                        || Block.plantRed.canThisPlantGrowOnThisBlockID(sandBeach.blockID)
++                        || Block.plantRed.canThisPlantGrowOnThisBlockID(gravelBeach.blockID)) ? null
++                : theme.getMushroomCount() > theme.getFlowerCount() ? Block.mushroomBrown
++                : theme.getFlowerCount() == 0 ? null
++                : Block.plantRed;
++        int liquidZ = liquid == null || Block.lightValue[liquid.blockID] == 0 ? 0 : 1;
++
++        GL11.glEnable(GL11.GL_TEXTURE_2D);
++        GL11.glBindTexture(GL11.GL_TEXTURE_2D, this.mc.renderEngine.getTexture("/terrain.png"));
++
++        switch (type) {
++            case FLOATING:
++                this.drawBlock(24, 40, soil);
++                this.drawBlock(16, 32, ground);
++                this.drawBlock(32, 32, ground);
++                drawGradientRect(0, 0, 64, 64, 127 << 24 | sky, 127 << 24 | fog);
++                this.drawBlock(0, 8, sapling);
++                this.drawBlock(12, 10, flower);
++                this.drawBlock(40, 0, sapling);
++                this.drawBlock(32, 2, flower);
++                this.drawBlock(56, 4, flower, 8, 16);
++                this.drawBlock(0, 32, soil);
++                this.drawBlock(0, 24, ground);
++                this.drawBlock(8, 24, ground);
++                this.drawBlock(48, 24, soil);
++                this.drawBlock(32, 16, ground);
++                this.drawBlock(48, 16, ground);
++                if (liquid != null) {
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 60, liquid, 16, 4);
++                    this.drawBlock(16, 60, liquid, 16, 4);
++                    this.drawBlock(32, 60, liquid, 16, 4);
++                    this.drawBlock(48, 60, liquid, 16, 4);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case FLAT:
++                this.drawBlock(4, 32, sapling);
++                this.drawBlock(28, 36, sapling);
++                this.drawBlock(40, 32, sapling);
++                this.drawBlock(12, 36, flower);
++                this.drawBlock(36, 36, flower);
++                this.drawBlock(0, 48, ground);
++                this.drawBlock(16, 48, ground);
++                this.drawBlock(32, 48, ground);
++                this.drawBlock(48, 48, ground);
++                break;
++
++            case INLAND:
++                this.drawBlock(0, 16, sapling);
++                this.drawBlock(36, 16, sapling);
++                this.drawBlock(46, 18, sapling);
++                this.drawBlock(6, 20, flower);
++                this.drawBlock(40, 22, flower);
++                this.drawBlock(0, 48, soil);
++                this.drawBlock(16, 48, soil);
++                this.drawBlock(32, 48, soil);
++                this.drawBlock(48, 48, soil);
++                this.drawBlock(0, 32, ground);
++                this.drawBlock(32, 32, ground);
++                this.drawBlock(48, 32, ground);
++                this.drawBlock(16, 40, gravelBeach);
++                this.drawBlock(32, 40, sandBeach, 16, 8);
++                break;
++
++            case MOUNTAINS:
++                this.drawBlock(24, 8, sapling);
++                this.drawBlock(48, 0, sapling);
++                this.drawBlock(-2, 4, flower, 16, 12);
++                this.drawBlock(24, 24, ground);
++                this.drawBlock(24, 40, soil);
++                this.drawBlock(32, 16, stone);
++                this.drawBlock(48, 16, stone);
++                this.drawBlock(32, 32, stone);
++                this.drawBlock(48, 32, stone);
++                this.drawBlock(32, 0, ground);
++                this.drawBlock(48, 8, ground);
++                this.drawBlock(0, 16, ground, 8, 16);
++                this.drawBlock(0, 32, soil, 8, 16);
++                drawGradientRect(0, 0, 64, 64, 127 << 24 | sky, 127 << 24 | fog);
++                this.drawBlock(4, 24, sapling);
++                this.drawBlock(34, 34, sapling);
++                this.drawBlock(48, 32, sapling);
++                this.drawBlock(42, 38, flower);
++                this.drawBlock(0, 28, flower);
++                this.drawBlock(0, 56, soil, 16, 8);
++                this.drawBlock(0, 40, ground);
++                this.drawBlock(16, 56, soil, 16, 8);
++                this.drawBlock(32, 48, ground);
++                this.drawBlock(48, 48, ground);
++                this.drawBlock(48, 56, ground, 16, 8);
++                drawGradientRect(16, 50, 32, 56, 0x33000000, 0x55000000);
++                drawGradientRect(0, 56, 48, 64, 0x55000000, 0x77000000);
++                if (liquid != null) {
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 56, liquid, 16, 8);
++                    this.drawBlock(16, 56, liquid, 16, 8);
++                    this.drawBlock(16, 50, liquid, 16, 6);
++                    this.drawBlock(32, 56, liquid, 16, 8);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case MARSH:
++                this.drawBlock(0, 32, sapling);
++                this.drawBlock(36, 36, sapling);
++                this.drawBlock(48, 32, sapling);
++                this.drawBlock(8, 36, flower, 16, 12);
++                this.drawBlock(44, 36, flower);
++                this.drawBlock(0, 48, ground);
++                this.drawBlock(16, 56, gravelBeach, 16, 8);
++                this.drawBlock(32, 48, ground);
++                this.drawBlock(32, 56, sandBeach, 16, 8);
++                this.drawBlock(48, 48, ground);
++                if (liquid != null) {
++                    drawGradientRect(0, 58, 64, 64, 0x33000000, 0x77000000);
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 58, liquid, 16, 6);
++                    this.drawBlock(16, 58, liquid, 16, 6);
++                    this.drawBlock(32, 58, liquid, 16, 6);
++                    this.drawBlock(48, 58, liquid, 16, 6);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case EXTREME_HILLS:
++            case WILD_CLIFFS:
++                this.drawBlock(16, 24, stone);
++                this.drawBlock(32, 24, stone);
++                this.drawBlock(48, 24, stone);
++                this.drawBlock(16, 40, stone);
++                this.drawBlock(32, 40, stone);
++                this.drawBlock(48, 40, stone);
++                this.drawBlock(16, 56, stone, 16, 8);
++                this.drawBlock(32, 56, stone, 16, 8);
++                this.drawBlock(48, 56, stone, 16, 8);
++                this.drawBlock(16, 16, ground);
++                this.drawBlock(32, 8, ground);
++                drawGradientRect(0, 0, 64, 64, 127 << 24 | sky, 127 << 24 | fog);
++
++            case CLIFFS:
++                this.drawBlock(2, 10, sapling);
++                this.drawBlock(46, 2, sapling);
++                this.drawBlock(8, 12, flower);
++                this.drawBlock(54, 4, flower, 10, 16);
++                this.drawBlock(0, 24, ground);
++                this.drawBlock(8, 24, ground);
++                this.drawBlock(0, 32, stone);
++                this.drawBlock(0, 48, stone);
++                this.drawBlock(56, 32, stone, 8, 16);
++                this.drawBlock(56, 48, stone, 8, 16);
++                this.drawBlock(48, 16, ground);
++                if (type != LevelType.EXTREME_HILLS) {
++                    this.drawBlock(0, 56, sandBeach, 16, 8);
++                    this.drawBlock(16, 56, sandBeach, 16, 8);
++                    this.drawBlock(48, 56, gravelBeach, 16, 8);
++                } else {
++                    this.drawBlock(0, 48, ground);
++                    this.drawBlock(16, 56, ground, 16, 8);
++                    this.drawBlock(32, 56, ground, 16, 8);
++                    this.drawBlock(48, 48, ground);
++                    this.drawBlock(28, 40, sapling);
++                }
++                if (liquid != null && type != LevelType.EXTREME_HILLS) {
++                    drawGradientRect(0, 52, 64, 64, 0x33000000, 0x77000000);
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 52, liquid, 16, 12);
++                    this.drawBlock(16, 52, liquid, 16, 12);
++                    this.drawBlock(32, 52, liquid, 16, 12);
++                    this.drawBlock(48, 52, liquid, 16, 12);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case VALLEY:
++                this.drawBlock(32, 0, Block.blockSnow);
++                this.drawBlock(24, 16, stone);
++                this.drawBlock(40, 16, stone);
++                this.drawBlock(16, 32, stone);
++                this.drawBlock(32, 32, stone);
++                this.drawBlock(48, 32, stone);
++                drawGradientRect(0, 0, 64, 64, 127 << 24 | sky, 127 << 24 | fog);
++                this.drawBlock(0, 16, Block.blockSnow);
++                this.drawBlock(0, 24, stone);
++                this.drawBlock(16, 24, stone);
++                this.drawBlock(0, 40, stone);
++                this.drawBlock(8, 40, stone);
++                this.drawBlock(24, 40, stone);
++                this.drawBlock(56, 32, stone, 8, 16);
++                this.drawBlock(40, 32, sapling);
++                this.drawBlock(48, 36, flower);
++                this.drawBlock(0, 56, gravelBeach, 16, 8);
++                this.drawBlock(16, 56, sandBeach, 16, 8);
++                this.drawBlock(32, 48, ground);
++                this.drawBlock(48, 48, ground);
++                if (liquid != null) {
++                    drawGradientRect(0, 52, 64, 64, 0x33000000, 0x77000000);
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 52, liquid, 16, 12);
++                    this.drawBlock(16, 52, liquid, 16, 12);
++                    this.drawBlock(32, 52, liquid, 16, 12);
++                    this.drawBlock(48, 52, liquid, 16, 12);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case PLAINS:
++                this.drawBlock(2, 24, sapling);
++                this.drawBlock(28, 36, sapling);
++                this.drawBlock(44, 24, sapling);
++                this.drawBlock(12, 28, flower);
++                this.drawBlock(36, 36, flower);
++                this.drawBlock(0, 40, ground);
++                this.drawBlock(16, 40, ground, 8, 16);
++                this.drawBlock(48, 40, ground);
++                this.drawBlock(0, 48, sandBeach);
++                this.drawBlock(16, 48, ground);
++                this.drawBlock(32, 48, ground);
++                this.drawBlock(48, 48, gravelBeach);
++                this.drawBlock(0, 56, soil, 16, 8);
++                this.drawBlock(48, 56, soil, 16, 8);
++                break;
++
++            case ARCHIPELAGO:
++                this.drawBlock(2, 20, sapling);
++                this.drawBlock(46, 18, sapling);
++                this.drawBlock(0, 20, flower);
++                this.drawBlock(0, 32, ground);
++                this.drawBlock(48, 32, ground);
++                this.drawBlock(0, 40, sandBeach);
++                this.drawBlock(8, 40, sandBeach);
++                this.drawBlock(40, 40, gravelBeach);
++                this.drawBlock(48, 40, gravelBeach);
++                this.drawBlock(0, 48, sandBeach);
++                this.drawBlock(16, 48, sandBeach);
++                this.drawBlock(32, 48, sandBeach);
++                this.drawBlock(48, 48, sandBeach);
++                if (liquid != null) {
++                    drawGradientRect(0, 48, 64, 64, 0x33000000, 0x77000000);
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 48, liquid);
++                    this.drawBlock(16, 48, liquid);
++                    this.drawBlock(32, 48, liquid);
++                    this.drawBlock(48, 48, liquid);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++
++            case CAVERNS:
++                this.drawBlock(16, 16, stone);
++                this.drawBlock(32, 16, stone);
++                this.drawBlock(48, 16, stone);
++                this.drawBlock(0, 32, stone);
++                this.drawBlock(16, 32, stone);
++                this.drawBlock(32, 32, stone);
++                this.drawBlock(48, 32, stone);
++                this.drawBlock(16, 48, stone);
++                this.drawBlock(48, 48, stone);
++                drawGradientRect(0, 8, 64, 64, 191 << 24, 191 << 24);
++                this.drawBlock(4, 0, sapling);
++                this.drawBlock(30, 0, sapling);
++                this.drawBlock(40, 0, sapling);
++                this.drawBlock(0, 8, ground);
++                this.drawBlock(16, 8, ground);
++                this.drawBlock(32, 8, ground);
++                this.drawBlock(48, 8, ground);
++                this.drawBlock(0, 16, stone, 16, 8);
++                this.drawBlock(16, 16, stone, 16, 8);
++                this.drawBlock(32, 16, stone, 16, 8);
++                this.drawBlock(48, 16, stone, 16, 8);
++                this.drawBlock(0, 16, stone);
++                this.drawBlock(0, 32, stone, 8, 8);
++                this.drawBlock(0, 48, stone);
++                this.drawBlock(16, 48, stone, 8, 16);
++                this.drawBlock(24, 56, stone, 16, 8);
++                this.drawBlock(32, 48, stone);
++                this.drawBlock(32, 32, stone, 8, 16);
++                this.drawBlock(24, 16, stone);
++                this.drawBlock(48, 56, stone, 16, 8);
++                this.drawBlock(48, 16, stone, 8, 16);
++                break;
++
++            case RUBYLANDS:
++                this.drawBlock(24, 0, sapling);
++                this.drawBlock(24, 16, soil);
++                this.drawBlock(40, 16, soil);
++                this.drawBlock(56, 16, soil, 8, 16);
++                this.drawBlock(24, 24, stone);
++                this.drawBlock(40, 24, stone);
++                this.drawBlock(56, 24, stone, 8, 16);
++                this.drawBlock(48, 32, stone);
++                this.drawBlock(24, 8, ground);
++                this.drawBlock(40, 0, ground);
++                this.drawBlock(48, 0, ground);
++                drawGradientRect(0, 0, 64, 64, 127 << 24 | sky, 127 << 24 | fog);
++                this.drawBlock(0, 16, sapling);
++                this.drawBlock(46, 34, sapling);
++                this.drawBlock(30, 24, sapling);
++                this.drawBlock(12, 28, flower);
++                this.drawBlock(24, 30, flower);
++                this.drawBlock(0, 48, soil);
++                this.drawBlock(16, 48, soil);
++                this.drawBlock(32, 48, soil);
++                this.drawBlock(0, 32, ground);
++                this.drawBlock(16, 40, ground);
++                this.drawBlock(32, 40, ground);
++                this.drawBlock(48, 48, ground);
++                break;
++
++            case MOSAIC:
++                this.drawBlock(0, 16, sapling);
++                this.drawBlock(16, 32, flower);
++                this.drawBlock(32, 0, sapling);
++                this.drawBlock(48, 16, flower);
++                this.drawBlock(0, 48, soil);
++                this.drawBlock(32, 32, soil);
++                this.drawBlock(32, 48, soil);
++                this.drawBlock(48, 48, soil);
++                this.drawBlock(0, 32, ground);
++                this.drawBlock(16, 48, ground);
++                this.drawBlock(32, 16, ground);
++                this.drawBlock(48, 32, ground);
++                break;
++
++            case ISLAND:
++            default:
++                this.drawBlock(14, 20, sapling);
++                this.drawBlock(28, 18, sapling);
++                this.drawBlock(24, 20, flower);
++                this.drawBlock(16, 32, ground);
++                this.drawBlock(32, 32, ground);
++                this.drawBlock(8, 40, sandBeach);
++                this.drawBlock(24, 40, sandBeach);
++                this.drawBlock(40, 40, gravelBeach);
++                this.drawBlock(0, 48, sandBeach);
++                this.drawBlock(16, 48, sandBeach);
++                this.drawBlock(32, 48, sandBeach);
++                this.drawBlock(48, 48, sandBeach);
++                if (liquid != null) {
++                    drawGradientRect(0, 48, 64, 64, 0x33000000, 0x77000000);
++                    GL11.glEnable(GL11.GL_BLEND);
++                    this.zLevel = liquidZ;
++                    this.drawBlock(0, 48, liquid);
++                    this.drawBlock(16, 48, liquid);
++                    this.drawBlock(32, 48, liquid);
++                    this.drawBlock(48, 48, liquid);
++                    this.zLevel = 0;
++                    GL11.glDisable(GL11.GL_BLEND);
++                }
++                break;
++        }
++
++        GL11.glBindTexture(GL11.GL_TEXTURE_2D, 0);
++
++        int darkness = (255 - Math.min(theme.getSkyBrightness(), 15) * 17) << 24;
++        drawGradientRect(0, 0, 64, 64, darkness, darkness);
++    }
++
++    private void drawBlock(int x, int y, Block block) {
++        this.drawBlock(x, y, block, 16, 16);
++    }
++
++    private void drawBlock(int x, int y, Block block, int w, int h) {
++        if (block == null) return;
++        int texture = block.getBlockTextureFromSide(2);
++        int tx = texture % 16 * 16;
++        int ty = texture / 16 * 16;
++        this.drawTexturedModalRect(x, y, tx, ty, w, h);
++    }
++
++    public void onGuiClosed() {
++        if (this.infoProviderThread != null) {
++            this.infoProviderThread.running = false;
++            this.infoProviderThread = null;
++        }
++    }
++
++    protected void actionPerformed(GuiButton var1) {
++        switch (var1.id) {
++            case 0:
++                this.mc.displayGuiScreen(this.parent);
++                break;
++            case 1:
++                this.mc.displayGuiScreen(new GuiTextPrompt(this.parent, this.nonExistingTitle, this.callbackNonExisting, this.inputValidifier));
++                break;
++            case 2:
++                this.deleting = !this.deleting;
++                var1.displayString = "Deleting: " + (this.deleting ? "ON" : "OFF");
++                break;
++            case 3:
++                this.mouseScrolled(300);
++                break;
++            case 4:
++                this.mouseScrolled(-300);
++                break;
++        }
++    }
++
++    protected void mouseScrolled(int delta) {
++        this.scroll += delta / -6;
++        this.scroll = MathHelper.clamp(this.scroll, 0, this.maxScroll);
++    }
++
++    protected void drawSlotInventory(int var1, int var2, int var3) {
++        super.drawSlotInventory(var1, var2, var3);
++        if (var3 == 0 && this.selection != null) {
++            if (ThreadSaveLevel.isBusyWithFile(this.selection)) {
++                this.mc.sndManager.playSoundFX("random.wood click", 1.0F, 0.5F);
++            } else {
++                this.mc.sndManager.playSoundFX("random.click", 1.0F, 1.0F);
++                (this.deleting ? this.callbackDeletion : this.callbackExisting).accept(this.selection);
++            }
++        }
++    }
++
++    public static class FileInfo {
++        public static final FileInfo FALLBACK = new FileInfo(
++                LevelType.ISLAND,
++                LevelTheme.NORMAL,
++                LevelStructure.NONE,
++                0,
++                0,
++                0,
++                false,
++                0,
++                0
++        );
++
++        public final LevelType levelType;
++        public final LevelTheme levelTheme;
++        public final LevelStructure levelStructure;
++        public final int width;
++        public final int height;
++        public final int length;
++        public final boolean creative;
++        public final long lastModified;
++        public final long fileSize;
++
++        public FileInfo(LevelType levelType, LevelTheme levelTheme, LevelStructure levelStructure, int width, int height, int length, boolean creative, long lastModified, long fileSize) {
++            this.levelType = levelType;
++            this.levelTheme = levelTheme;
++            this.levelStructure = levelStructure;
++            this.width = width;
++            this.height = height;
++            this.length = length;
++            this.creative = creative;
++            this.lastModified = lastModified;
++            this.fileSize = fileSize;
++        }
++    }
++
++    private static class ThreadProvideFileInfo extends Thread {
++        public volatile boolean running;
++        private final Map<File, FileInfo> fileInfoMap = Collections.synchronizedMap(new HashMap<>());
++        private final BlockingQueue<File> filesToProcess = new PriorityBlockingQueue<>(11, Comparator.comparingLong(File::length));
++        private final Function<File, FileInfo> fileInfoProvider;
++        private volatile File processingFile;
++
++        public ThreadProvideFileInfo(Function<File, FileInfo> fileInfoProvider) {
++            this.fileInfoProvider = fileInfoProvider;
++        }
++
++        public void run() {
++            this.running = true;
++            try {
++                while (this.running) {
++                    File file = this.processingFile = filesToProcess.take();
++                    if (ThreadSaveLevel.isBusyWithFile(file)) {
++                        this.processingFile = null;
++                        continue;
++                    }
++
++                    FileInfo fileInfo = this.fileInfoProvider.apply(file);
++                    if (fileInfo == null) {
++                        fileInfo = FileInfo.FALLBACK;
++                    }
++                    this.fileInfoMap.put(file, fileInfo);
++                    this.processingFile = null;
++                }
++            } catch (InterruptedException ignored) {
++            }
++            this.running = false;
++        }
++
++        public FileInfo getFileInfo(File file) {
++            FileInfo fileInfo = this.fileInfoMap.get(file);
++            if (fileInfo == null
++                    && !filesToProcess.contains(file)
++                    && file != this.processingFile
++                    && !ThreadSaveLevel.isBusyWithFile(file)) {
++                filesToProcess.add(file);
++            }
++            return fileInfo;
++        }
++    }
++}
 --- net/minecraft/game/entity/player/InventoryPlayer.java
 +++ net/minecraft/game/entity/player/InventoryPlayer.java
 @@ -14,6 +14,13 @@
@@ -12532,7 +14105,7 @@
  		}
 --- net/minecraft/game/level/block/BlockCrops.java
 +++ net/minecraft/game/level/block/BlockCrops.java
-@@ -7,7 +7,7 @@
+@@ -7,14 +7,14 @@
  import net.minecraft.game.level.World;
  
  public final class BlockCrops extends BlockFlower {
@@ -12541,6 +14114,14 @@
  		super(59, 88);
  		this.blockIndexInTexture = 88;
  		this.setTickOnLoad(true);
+ 		this.setBlockBounds(0.0F, 0.0F, 0.0F, 1.0F, 0.25F, 1.0F);
+ 	}
+ 
+-	protected final boolean canThisPlantGrowOnThisBlockID(int var1) {
++	public final boolean canThisPlantGrowOnThisBlockID(int var1) {
+ 		return var1 == Block.tilledField.blockID;
+ 	}
+ 
 --- net/minecraft/game/item/ItemHoe.java
 +++ net/minecraft/game/item/ItemHoe.java
 @@ -17,10 +17,10 @@
@@ -14457,7 +16038,7 @@
 +}
 --- /dev/null
 +++ net/minecraft/client/ScreenShotHelper.java
-@@ -1,0 +1,81 @@
+@@ -1,0 +1,78 @@
 +package net.minecraft.client;
 +
 +import java.awt.image.BufferedImage;
@@ -14473,66 +16054,63 @@
 +public class ScreenShotHelper {
 +	private static DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd_HH.mm.ss");
 +	private static ByteBuffer buffer;
-+	private static byte[] pixelData;
-+	private static int[] imageData;
 +
 +	public static String saveScreenshot(File var0, int var1, int var2) {
 +		return func_35879_a(var0, (String)null, var1, var2);
 +	}
 +
-+	public static String func_35879_a(File var0, String var1, int var2, int var3) {
++	public static String func_35879_a(File var0, String str, int var1, int var2) {
 +		try {
-+			File var4 = new File(var0, "screenshots");
-+			var4.mkdir();
-+			if(buffer == null || buffer.capacity() < var2 * var3 * 3) {
-+				buffer = BufferUtils.createByteBuffer(var2 * var3 * 3);
-+			}
-+
-+			if(imageData == null || imageData.length < var2 * var3 * 3) {
-+				pixelData = new byte[var2 * var3 * 3];
-+				imageData = new int[var2 * var3];
++			File var3 = new File(var0, "screenshots");
++			var3.mkdirs();
++			if(buffer == null || buffer.capacity() < var1 * var2 * 3) {
++				buffer = BufferUtils.createByteBuffer(var1 * var2 * 3);
 +			}
 +
 +			GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
 +			GL11.glPixelStorei(GL11.GL_UNPACK_ALIGNMENT, 1);
 +			buffer.clear();
-+			GL11.glReadPixels(0, 0, var2, var3, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, (ByteBuffer)buffer);
++			GL11.glReadPixels(0, 0, var1, var2, GL11.GL_RGB, GL11.GL_UNSIGNED_BYTE, (ByteBuffer)buffer);
 +			buffer.clear();
-+			String var5 = "" + dateFormat.format(new Date());
-+			File var6;
-+			int var7;
-+			if(var1 == null) {
-+				var7 = 1;
++			String var4 = dateFormat.format(new Date());
++			int var6 = 1;
 +
-+				while(true) {
-+					var6 = new File(var4, var5 + (var7 == 1 ? "" : "_" + var7) + ".png");
-+					if(!var6.exists()) {
-+						break;
++			while(true) {
++				File var5 = new File(var3, str != null ? str : var4 + (var6 == 1 ? "" : "_" + var6) + ".png");
++				if(!var5.exists()) {
++					if (!var5.createNewFile()) {
++						return "Failed to save: could not create new file";
 +					}
 +
-+					++var7;
++					byte[] pixelData = new byte[var1 * var2 * 3];
++					buffer.get(pixelData);
++
++					new Thread(() -> {
++						int[] imageData = new int[var1 * var2];
++						for(int var7 = 0; var7 < var1; ++var7) {
++							for(int var8 = 0; var8 < var2; ++var8) {
++								int var9 = var7 + (var2 - var8 - 1) * var1;
++								int var10 = pixelData[var9 * 3 + 0] & 255;
++								int var11 = pixelData[var9 * 3 + 1] & 255;
++								int var12 = pixelData[var9 * 3 + 2] & 255;
++								int var13 = -16777216 | var10 << 16 | var11 << 8 | var12;
++								imageData[var7 + var8 * var1] = var13;
++							}
++						}
++
++						BufferedImage var15 = new BufferedImage(var1, var2, 1);
++						var15.setRGB(0, 0, var1, var2, imageData, 0, var1);
++						try {
++							ImageIO.write(var15, "png", var5);
++						} catch (Exception e) {
++							e.printStackTrace();
++						}
++					}).start();
++					return "Saving screenshot as " + var5.getName();
 +				}
-+			} else {
-+				var6 = new File(var4, var1);
++
++				++var6;
 +			}
-+
-+			buffer.get(pixelData);
-+
-+			for(var7 = 0; var7 < var2; ++var7) {
-+				for(int var8 = 0; var8 < var3; ++var8) {
-+					int var9 = var7 + (var3 - var8 - 1) * var2;
-+					int var10 = pixelData[var9 * 3 + 0] & 255;
-+					int var11 = pixelData[var9 * 3 + 1] & 255;
-+					int var12 = pixelData[var9 * 3 + 2] & 255;
-+					int var13 = -16777216 | var10 << 16 | var11 << 8 | var12;
-+					imageData[var7 + var8 * var2] = var13;
-+				}
-+			}
-+
-+			BufferedImage var15 = new BufferedImage(var2, var3, 1);
-+			var15.setRGB(0, 0, var2, var3, imageData, 0, var2);
-+			ImageIO.write(var15, "png", var6);
-+			return "Saved screenshot as " + var6.getName();
 +		} catch (Exception var14) {
 +			var14.printStackTrace();
 +			return "Failed to save: " + var14;
@@ -14751,8 +16329,8 @@
 +	protected void actionPerformed(GuiButton var1) {
 +		if (var1.id == 1) {
 +			this.mc.deleteWorld();
++			this.mc.displayGuiScreen(this.mc.theWorld == null ? this.parentScreen : null);
 +			this.mc.setLevel(null);
-+			this.mc.displayGuiScreen(null);
 +			return;
 +		}
 +
@@ -15156,7 +16734,7 @@
  	public final float getStrVsBlock(Block var1) {
 --- /dev/null
 +++ net/minecraft/game/level/generator/LevelType.java
-@@ -1,0 +1,635 @@
+@@ -1,0 +1,693 @@
 +package net.minecraft.game.level.generator;
 +
 +import net.minecraft.game.level.generator.terrain.*;
@@ -15192,6 +16770,11 @@
 +		@Override
 +		public int modifyWaterLevel(int groundLevel, int waterLevel) {
 +			return waterLevel;
++		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
 +		}
 +	},
 +	FLOATING("Floating") {
@@ -15239,7 +16822,7 @@
 +
 +		@Override
 +		public String getHorizonType() {
-+			return null;
++			return "floating";
 +		}
 +
 +		@Override
@@ -15348,6 +16931,11 @@
 +		public String getHorizonType() {
 +			return "mountains";
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	MARSH("Marsh") {
 +		@Override
@@ -15391,6 +16979,11 @@
 +		@Override
 +		public int getLakeRarity() {
 +			return 0;
++		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
 +		}
 +	},
 +	CLIFFS("Cliffs") {
@@ -15438,6 +17031,11 @@
 +		public String getHorizonType() {
 +			return "hills";
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	WILD_CLIFFS("Wild Cliffs") {
 +		@Override
@@ -15479,6 +17077,11 @@
 +		@Override
 +		public String getHorizonType() {
 +			return "mountains";
++		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
 +		}
 +	},
 +	VALLEY("Valley") {
@@ -15527,6 +17130,11 @@
 +		public String getHorizonType() {
 +			return "mountains";
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	EXTREME_HILLS("Extreme Hills") {
 +		@Override
@@ -15567,6 +17175,11 @@
 +		public String getHorizonType() {
 +			return "mountains";
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	PLAINS("Plains") {
 +		@Override
@@ -15601,6 +17214,11 @@
 +		public String getHorizonType() {
 +			return "hills";
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	ARCHIPELAGO("Archipelago") {
 +		@Override
@@ -15629,6 +17247,11 @@
 +		@Override
 +		public int modifyWaterLevel(int groundLevel, int waterLevel) {
 +			return waterLevel;
++		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
 +		}
 +	},
 +	CAVERNS("Caverns") {
@@ -15669,6 +17292,11 @@
 +		public int getCloudHeight(int levelHeight, int waterLevel) {
 +			return levelHeight;
 +		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
++		}
 +	},
 +	RUBYLANDS("Rubylands") {
 +		@Override
@@ -15686,6 +17314,11 @@
 +		@Override
 +		public int getCloudHeight(int levelHeight, int waterLevel) {
 +			return levelHeight;
++		}
++
++		@Override
++		public boolean prefixThemeName() {
++			return true;
 +		}
 +	},
 +	MOSAIC("Mosaic") {
@@ -15771,7 +17404,10 @@
 +		return "islands";
 +	}
 +
-+	@Override
++	public boolean prefixThemeName() {
++		return false;
++	}
++
 +	public String toString() {
 +		return this.name;
 +	}
@@ -15861,12 +17497,12 @@
  
 -public final class Minecraft implements Runnable {
 +public class Minecraft implements Runnable {
-+	public static final String VERSION = "Indev Adventure 20250410";
++	public static final String VERSION = "Indev Adventure 20250412";
 +	public static final int AUTOSAVE_INTERVAL = 60 * 20;
 +
 +	public static final Set<Character> VALID_PATH_CHARACTERS; static {
 +		HashSet<Character> validPathCharacters = new HashSet<>();
-+		for (char c : " !#$%&'()+,-.0123456789;=ABCDEFGHIJKLMNOQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{}~".toCharArray()) {
++		for (char c : " !#$%&'()+,-.0123456789;=ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{}~".toCharArray()) {
 +			validPathCharacters.add(c);
 +		}
 +		VALID_PATH_CHARACTERS = Collections.unmodifiableSet(validPathCharacters);
@@ -15875,11 +17511,13 @@
  	public PlayerController playerController = new PlayerControllerSP(this);
  	private boolean fullscreen = false;
  	public int displayWidth;
-@@ -93,17 +105,22 @@
+@@ -92,18 +104,23 @@
+ 	private MinecraftApplet mcApplet;
  	public SoundManager sndManager;
  	public MouseHelper mouseHelper;
- 	public File mcDataDir;
-+	public File worldDir;
+-	public File mcDataDir;
++	public static File mcDataDir;
++	public File worldSaveLocation;
  	private String server;
  	private TextureWaterFX textureWaterFX;
  	private TextureLavaFX textureLavaFX;
@@ -15928,15 +17566,43 @@
  		try {
  			if(this.downloadResourcesThread != null) {
  				this.downloadResourcesThread.closeMinecraft();
-@@ -273,6 +305,7 @@
- 			}
- 
- 			this.mcDataDir = var27;
-+			this.worldDir = new File(var27, "inadv-world");
- 			this.options = new GameSettings(this, this.mcDataDir);
+@@ -247,33 +279,8 @@
+ 			String var26 = System.getProperty("user.home", ".");
+ 			int[] var10001 = EnumOSMappingHelper.osValues;
+ 			String var4 = System.getProperty("os.name").toLowerCase();
+-			File var27;
+-			switch(var10001[(var4.contains("win") ? EnumOS.windows : (var4.contains("mac") ? EnumOS.macos : (var4.contains("solaris") ? EnumOS.solaris : (var4.contains("sunos") ? EnumOS.solaris : (var4.contains("linux") ? EnumOS.linux : (var4.contains("unix") ? EnumOS.linux : EnumOS.unknown)))))).ordinal()]) {
+-			case 1:
+-			case 2:
+-				var27 = new File(var26, '.' + var3 + '/');
+-				break;
+-			case 3:
+-				var4 = System.getenv("APPDATA");
+-				if(var4 != null) {
+-					var27 = new File(var4, "." + var3 + '/');
+-				} else {
+-					var27 = new File(var26, '.' + var3 + '/');
+-				}
+-				break;
+-			case 4:
+-				var27 = new File(var26, "Library/Application Support/" + var3);
+-				break;
+-			default:
+-				var27 = new File(var26, var3 + '/');
+-			}
+-
+-			if(!var27.exists() && !var27.mkdirs()) {
+-				throw new RuntimeException("The working directory could not be created: " + var27);
+-			}
+-
+-			this.mcDataDir = var27;
+-			this.options = new GameSettings(this, this.mcDataDir);
++			this.worldSaveLocation = new File(getAppDir(), "inadv-world");
++			this.options = new GameSettings(this, getAppDir());
  			this.sndManager.loadSoundSettings(this.options);
  			this.renderEngine = new RenderEngine(this.options);
-@@ -290,7 +323,7 @@
+ 			this.renderEngine.registerTextureFX(this.textureLavaFX);
+@@ -290,16 +297,16 @@
  			GL11.glViewport(0, 0, this.displayWidth, this.displayHeight);
  			if(this.server != null && this.session != null) {
  				World var31 = new World();
@@ -15944,8 +17610,19 @@
 +				var31.generate(8, 8, 8, new byte[512], new byte[512], new byte[512], new int[512]);
  				this.setLevel(var31);
  			} else if(this.theWorld == null) {
- 				this.displayGuiScreen(new GuiMainMenu());
-@@ -316,9 +349,7 @@
+-				this.displayGuiScreen(new GuiMainMenu());
++				this.displayGuiScreen(new GuiAutosaveInfo());
+ 			}
+ 
+ 			this.effectRenderer = new EffectRenderer(this.theWorld, this.renderEngine);
+ 
+ 			try {
+-				var1.downloadResourcesThread = new ThreadDownloadResources(var1.mcDataDir, var1);
++				var1.downloadResourcesThread = new ThreadDownloadResources(getAppDir(), var1);
+ 				var1.downloadResourcesThread.start();
+ 			} catch (Exception var14) {
+ 			}
+@@ -316,16 +323,14 @@
  
  		try {
  			while(this.running) {
@@ -15956,7 +17633,15 @@
  
  				if(this.mcCanvas == null && Display.isCloseRequested()) {
  					this.running = false;
-@@ -338,18 +369,23 @@
+ 				}
+ 
+ 				try {
+-					if(this.isGamePaused) {
++					if(this.isGamePaused && this.theWorld != null) {
+ 						float var29 = this.timer.renderPartialTicks;
+ 						this.timer.updateTimer();
+ 						this.timer.renderPartialTicks = var29;
+@@ -338,18 +343,23 @@
  						this.runTick();
  					}
  
@@ -15982,7 +17667,7 @@
  					if(this.mcCanvas != null && !this.fullscreen && (this.mcCanvas.getWidth() != this.displayWidth || this.mcCanvas.getHeight() != this.displayHeight)) {
  						this.displayWidth = this.mcCanvas.getWidth();
  						this.displayHeight = this.mcCanvas.getHeight();
-@@ -357,7 +393,7 @@
+@@ -357,7 +367,7 @@
  					}
  
  					if(this.options.limitFramerate) {
@@ -15991,7 +17676,7 @@
  					}
  
  					++var28;
-@@ -369,6 +405,7 @@
+@@ -369,6 +379,7 @@
  				}
  
  				while(System.currentTimeMillis() >= var23 + 1000L) {
@@ -15999,7 +17684,7 @@
  					this.debug = var28 + " fps, " + WorldRenderer.chunksUpdated + " chunk updates";
  					WorldRenderer.chunksUpdated = 0;
  					var23 += 1000L;
-@@ -378,7 +415,7 @@
+@@ -378,7 +389,7 @@
  
  			return;
  		} catch (MinecraftError var19) {
@@ -16008,7 +17693,7 @@
  			var20.printStackTrace();
  			return;
  		} finally {
-@@ -406,12 +443,7 @@
+@@ -406,12 +417,7 @@
  			}
  
  			this.inventoryScreen = false;
@@ -16022,7 +17707,7 @@
  		}
  	}
  
-@@ -449,9 +481,7 @@
+@@ -449,9 +455,7 @@
  
  			if(this.objectMouseOver == null) {
  				if(var1 == 0 && !(this.playerController instanceof PlayerControllerCreative)) {
@@ -16032,7 +17717,7 @@
  			} else {
  				ItemStack var9;
  				if(this.objectMouseOver.typeOfHit == 1) {
-@@ -462,7 +492,9 @@
+@@ -462,7 +466,9 @@
  						var9 = var11.getStackInSlot(var11.currentItem);
  						int var17 = var9 != null ? Item.itemsList[var9.itemID].getDamageVsEntity() : 1;
  						if(var17 > 0) {
@@ -16043,7 +17728,7 @@
  							var2 = var12.inventory.getCurrentItem();
  							if(var2 != null && var14 instanceof EntityLiving) {
  								EntityLiving var8 = (EntityLiving)var14;
-@@ -490,7 +522,9 @@
+@@ -490,7 +496,9 @@
  					} else {
  						var9 = this.thePlayer.inventory.getCurrentItem();
  						int var16 = this.theWorld.getBlockId(var10, var3, var13);
@@ -16054,7 +17739,7 @@
  							return;
  						}
  
-@@ -629,19 +663,37 @@
+@@ -629,19 +637,37 @@
  
  								if(Mouse.getEventButton() == 2 && Mouse.getEventButtonState() && this.objectMouseOver != null) {
  									var2 = this.theWorld.getBlockId(this.objectMouseOver.blockX, this.objectMouseOver.blockY, this.objectMouseOver.blockZ);
@@ -16098,7 +17783,7 @@
  								}
  							}
  						} else if(this.currentScreen != null) {
-@@ -719,12 +771,28 @@
+@@ -719,12 +745,28 @@
  										}
  									}
  
@@ -16129,11 +17814,11 @@
  									}
  
  									if(Keyboard.getEventKey() == this.options.keyBindDrop.keyCode) {
-@@ -768,58 +836,74 @@
+@@ -768,58 +810,78 @@
  			}
  		}
  
-+		this.sndManager.playRandomMusicIfReady(0, 0, 0);
++		this.sndManager.playRandomMusicIfReady(0, 1.0F, 1.0F);
 +
  		if(this.theWorld != null) {
 +			this.theWorld.renderDistance = this.options.getRenderDistance();
@@ -16164,12 +17849,16 @@
 +
 +				if (this.thePlayer.getTravelDistance(0.0F) >= 1.0F && this.thePlayer.ticksExisted > 20) {
 +					this.travel();
-+				} else if (this.adventureMode) {
++				} else if (this.worldSaveLocation != null) {
 +					this.autosaveTime--;
 +					if (this.autosaveTime <= 0) {
 +						this.autosaveTime = AUTOSAVE_INTERVAL;
 +                        try {
-+                            this.saveWorld(false);
++							if (this.adventureMode) {
++								this.saveWorld(false);
++							} else {
++								this.saveCurrentLevel(false);
++							}
 +                        } catch (IOException e) {
 +                            this.ingameGUI.sendChatMessage("&cFailed to save level!");
 +                        }
@@ -16240,7 +17929,7 @@
  	}
  
  	public final void setLevel(World var1) {
-@@ -827,18 +911,12 @@
+@@ -827,18 +889,12 @@
  			this.theWorld.setLevel();
  		}
  
@@ -16263,7 +17952,7 @@
  			this.playerController.onWorldChange(var1);
  			this.thePlayer = (EntityPlayerSP)var1.findSubclassOf(EntityPlayerSP.class);
  			var1.playerEntity = this.thePlayer;
-@@ -864,16 +942,383 @@
+@@ -864,16 +920,451 @@
  				this.effectRenderer.clearEffects(var1);
  			}
  
@@ -16287,7 +17976,13 @@
 +		this.autosaveTime = AUTOSAVE_INTERVAL;
 +		this.worldInfo.worldTime = this.theWorld.worldTime;
 +		this.worldInfo.playerScore = this.thePlayer.getScore;
-+		this.worldDir.mkdirs();
++		this.worldInfo.currentLevelType = this.theWorld.levelType;
++		this.worldInfo.currentLevelTheme = this.theWorld.levelTheme;
++		this.worldInfo.currentLevelStructure = this.theWorld.levelStructure;
++		if (!this.worldSaveLocation.isDirectory() && !this.worldSaveLocation.mkdirs()) {
++			this.ingameGUI.sendChatMessage("&cCould not create world directory!");
++			return;
++		}
 +
 +		// Player
 +		NBTTagCompound worldInfoCompound = new NBTTagCompound();
@@ -16297,36 +17992,44 @@
 +		this.thePlayer.writeToNBT(playerCompound);
 +		playerCompound.setCompoundTag("WorldInfo", worldInfoCompound);
 +
-+		File playerFile = new File(this.worldDir, "player.dat");
-+		try (OutputStream playerStream = Files.newOutputStream(playerFile.toPath())) {
-+			try (DataOutputStream playerDataStream = new DataOutputStream(new GZIPOutputStream(playerStream))) {
-+				NBTBase.writeTag(playerCompound, playerDataStream);
-+			}
++		File playerFile = new File(this.worldSaveLocation, "player.dat");
++		try (OutputStream playerStream = Files.newOutputStream(playerFile.toPath());
++			 DataOutputStream playerDataStream = new DataOutputStream(new GZIPOutputStream(playerStream))) {
++			NBTBase.writeTag(playerCompound, playerDataStream);
 +		}
 +
 +		// Level
 +		String levelName = this.worldInfo.levelX + "," + this.worldInfo.levelZ;
-+		File newLevelFile = new File(this.worldDir, levelName + ".new.dat");
++		this.saveLevel(this.worldSaveLocation, levelName, showLoadingScreen);
++	}
++
++	public final void saveCurrentLevel(boolean showLoadingScreen) throws IOException {
++		if (this.adventureMode || this.worldSaveLocation == null || this.worldSaveLocation.isDirectory()) return;
++		this.saveLevel(this.worldSaveLocation.getParentFile(), this.worldSaveLocation.getName(), showLoadingScreen);
++	}
++
++	public final void saveLevel(File baseDir, String fileName, boolean showLoadingScreen) throws IOException {
++		this.autosaveTime = AUTOSAVE_INTERVAL;
++		File newLevelFile = new File(baseDir, fileName + ".new");
 +		int newLevelFileIndex = 0;
 +		while (newLevelFile.exists()) {
-+			newLevelFile = new File(this.worldDir, levelName + ".new" + ++newLevelFileIndex + ".dat");
++			newLevelFile = new File(baseDir, fileName + ".new" + ++newLevelFileIndex);
 +		}
-+		File iHateJavaLambdas = newLevelFile;
-+		File levelFile = new File(this.worldDir, levelName + ".dat");
-+		OutputStream levelOutputStream = Files.newOutputStream(newLevelFile.toPath());
++		final File iHateJavaLambdas = newLevelFile;
++		File levelFile = new File(baseDir, fileName);
 +		new PlayerLoader(this, showLoadingScreen ? this.loadingScreen : null)
-+			.save(this.theWorld, levelOutputStream, () -> {
-+				if (!levelFile.exists() || levelFile.delete()) {
-+					iHateJavaLambdas.renameTo(levelFile);
-+				}
-+			});
++				.save(this.theWorld, newLevelFile, () -> {
++					if (!levelFile.exists() || levelFile.delete()) {
++						iHateJavaLambdas.renameTo(levelFile);
++					}
++				});
 +	}
 +
 +	public final boolean loadWorld() throws IOException {
-+		if (!this.worldDir.exists()) return false;
++		if (!this.worldSaveLocation.exists()) return false;
 +
 +		// Player
-+		File playerFile = new File(this.worldDir, "player.dat");
++		File playerFile = new File(this.worldSaveLocation, "player.dat");
 +		if (!playerFile.exists()) return false;
 +
 +		NBTTagCompound playerCompound;
@@ -16343,7 +18046,7 @@
 +		this.worldInfo.readFromNBT(playerCompound.getCompoundTag("WorldInfo"));
 +
 +		// Level
-+		File levelFile = new File(this.worldDir, this.worldInfo.levelX + "," + this.worldInfo.levelZ + ".dat");
++		File levelFile = new File(this.worldSaveLocation, this.worldInfo.levelX + "," + this.worldInfo.levelZ + ".dat");
 +		if (levelFile.exists()) {
 +			try (InputStream levelStream = Files.newInputStream(levelFile.toPath())) {
 +				World world = new PlayerLoader(this, this.loadingScreen).load(levelStream);
@@ -16367,28 +18070,30 @@
 +	}
 +
 +	public void loadWorld(String path) {
++		if (path.isEmpty()) return;
++
 +		for (char c : path.toCharArray()) {
 +			if (!Minecraft.VALID_PATH_CHARACTERS.contains(c)) {
 +				return;
 +			}
 +		}
 +
-+		File worldsDir = new File(this.mcDataDir, "inadv-worlds");
-+		this.worldDir = new File(worldsDir, path);
++		File worldsDir = new File(Minecraft.getAppDir(), "inadv-worlds");
++		this.worldSaveLocation = new File(worldsDir, path);
 +
-+		File[] files = this.worldDir.listFiles();
-+		if (this.worldDir.isFile()) return;
++		File[] files = this.worldSaveLocation.listFiles();
++		if (this.worldSaveLocation.isFile()) return;
 +
 +		if (files != null && files.length != 0) {
++			this.adventureMode = true;
 +			try {
-+				this.adventureMode = true;
 +				if (this.loadWorld()) {
 +					this.displayGuiScreen(null);
 +				}
 +			} catch (IOException e) {
 +				e.printStackTrace();
 +				this.adventureMode = false;
-+				this.worldDir = null;
++				this.worldSaveLocation = null;
 +			}
 +			return;
 +		}
@@ -16404,11 +18109,19 @@
 +			}
 +		}
 +
-+		File levelsDir = new File(this.mcDataDir, "inadv-levels");
-+		File levelFile = new File(levelsDir, path + ".mclevel");
-+		if (!levelFile.exists()) return;
-+		this.adventureMode = false;
++		File levelsDir = new File(Minecraft.getAppDir(), "inadv-levels");
++		File levelFile = path.isEmpty() ? null : new File(levelsDir, path + ".mclevel");
++		this.worldSaveLocation = levelFile;
++		if (levelFile == null || !levelFile.exists()) {
++			this.displayGuiScreen(new GuiNewLevel(this.currentScreen));
++			return;
++		}
++		this.loadLevel(levelFile);
++	}
 +
++	public void loadLevel(File levelFile) {
++		this.adventureMode = false;
++		this.worldSaveLocation = levelFile;
 +		try (FileInputStream var4 = new FileInputStream(levelFile)) {
 +			World var2 = (new PlayerLoader(this, this.loadingScreen)).load(var4);
 +			this.setLevel(var2);
@@ -16425,17 +18138,19 @@
 +			}
 +		}
 +
-+		File levelsDir = new File(this.mcDataDir, "inadv-levels");
++		File levelsDir = new File(Minecraft.getAppDir(), "inadv-levels");
 +		File levelFile = new File(levelsDir, path + ".mclevel");
 +		if (!levelsDir.mkdirs() && !levelsDir.isDirectory()) return;
 +		this.adventureMode = false;
++		this.autosaveTime = AUTOSAVE_INTERVAL;
 +
-+		try  {
-+			FileOutputStream var3 = new FileOutputStream(levelFile);
-+			(new PlayerLoader(this, null)).save(this.theWorld, var3);
++		try {
++			(new PlayerLoader(this, null)).save(this.theWorld, levelFile);
 +		} catch (IOException var3) {
 +			var3.printStackTrace();
++			return;
 +		}
++		this.worldSaveLocation = levelFile;
 +	}
 +
 +	public void travel() {
@@ -16465,7 +18180,7 @@
 +		this.worldInfo.levelZ += z;
 +
 +		boolean levelLoaded = false;
-+		File levelFile = new File(this.worldDir, this.worldInfo.levelX + "," + this.worldInfo.levelZ + ".dat");
++		File levelFile = new File(this.worldSaveLocation, this.worldInfo.levelX + "," + this.worldInfo.levelZ + ".dat");
 +		if (levelFile.exists()) {
 +			try (InputStream levelStream = Files.newInputStream(levelFile.toPath())) {
 +				World world = new PlayerLoader(this, this.loadingScreen).load(levelStream);
@@ -16521,11 +18236,17 @@
 +	}
 +
 +	public void deleteWorld() {
-+		if (!this.worldDir.exists() || !this.worldDir.isDirectory()) return;
++		if (!this.adventureMode) {
++			if (!this.worldSaveLocation.isFile()) return;
++			this.worldSaveLocation.delete();
++			return;
++		}
 +
-+		File[] filesToDelete = this.worldDir.listFiles();
++		if (!this.worldSaveLocation.isDirectory()) return;
++
++		File[] filesToDelete = this.worldSaveLocation.listFiles();
 +		if (filesToDelete == null) {
-+			this.worldDir.delete();
++			this.worldSaveLocation.delete();
 +			return;
 +		}
 +
@@ -16539,7 +18260,7 @@
 +			file.delete();
 +		}
 +
-+		this.worldDir.delete();
++		this.worldSaveLocation.delete();
 +	}
 +
 +	public void respawn() {
@@ -16556,7 +18277,7 @@
 +
 +			InventoryPlayer inventory = this.thePlayer.inventory;
 +			boolean levelLoaded = false;
-+			File levelFile = new File(this.worldDir, "0,0.dat");
++			File levelFile = new File(this.worldSaveLocation, "0,0.dat");
 +			if (levelFile.exists()) {
 +				try (InputStream levelStream = Files.newInputStream(levelFile.toPath())) {
 +					World world = new PlayerLoader(this, this.loadingScreen).load(levelStream);
@@ -16591,7 +18312,7 @@
 +		if(Keyboard.isKeyDown(Keyboard.KEY_F2)) {
 +			if(!this.isTakingScreenshot) {
 +				this.isTakingScreenshot = true;
-+				this.ingameGUI.sendChatMessage(ScreenShotHelper.saveScreenshot(this.mcDataDir, this.displayWidth, this.displayHeight));
++				this.ingameGUI.sendChatMessage(ScreenShotHelper.saveScreenshot(Minecraft.getAppDir(), this.displayWidth, this.displayHeight));
 +			}
 +		} else {
 +			this.isTakingScreenshot = false;
@@ -16639,6 +18360,42 @@
 +		var5.setVisible(true);
 +		var5.addWindowListener(new GameWindowListener(var7, var8));
 +		var8.start();
++	}
++
++	public static File getAppDir() {
++		if (mcDataDir == null) {
++			String var3 = "minecraft";
++			String var26 = System.getProperty("user.home", ".");
++			int[] var10001 = EnumOSMappingHelper.osValues;
++			String var4 = System.getProperty("os.name").toLowerCase();
++			File var27;
++			switch(var10001[(var4.contains("win") ? EnumOS.windows : (var4.contains("mac") ? EnumOS.macos : (var4.contains("solaris") ? EnumOS.solaris : (var4.contains("sunos") ? EnumOS.solaris : (var4.contains("linux") ? EnumOS.linux : (var4.contains("unix") ? EnumOS.linux : EnumOS.unknown)))))).ordinal()]) {
++				case 1:
++				case 2:
++					var27 = new File(var26, '.' + var3 + '/');
++					break;
++				case 3:
++					var4 = System.getenv("APPDATA");
++					if(var4 != null) {
++						var27 = new File(var4, "." + var3 + '/');
++					} else {
++						var27 = new File(var26, '.' + var3 + '/');
++					}
++					break;
++				case 4:
++					var27 = new File(var26, "Library/Application Support/" + var3);
++					break;
++				default:
++					var27 = new File(var26, var3 + '/');
++			}
++
++			if(!var27.exists() && !var27.mkdirs()) {
++				throw new RuntimeException("The working directory could not be created: " + var27);
++			}
++
++			mcDataDir = var27;
++		}
++		return mcDataDir;
 +	}
 +
 +	public static void main(String[] var0) {
@@ -16822,7 +18579,7 @@
 +}
 --- net/minecraft/client/gui/GuiNewLevel.java
 +++ net/minecraft/client/gui/GuiNewLevel.java
-@@ -1,60 +1,144 @@
+@@ -1,60 +1,153 @@
  package net.minecraft.client.gui;
  
 +import net.minecraft.game.level.generator.LevelStructure;
@@ -16841,7 +18598,7 @@
 +			"Medium (512)",
 +			"Large (768)",
 +			"Extra Large (864)",
-+			"Massive (1024)",
++			"Massive (1024)"
 +	};
 +	private static final int[] SIZE_VALUES = { 128, 256, 384, 512, 768, 864, 1024 };
 +	private static final String[] HEIGHT_OPTIONS = {
@@ -16990,8 +18747,17 @@
  	public final void drawScreen(int var1, int var2, float var3) {
  		this.drawDefaultBackground();
 -		drawCenteredString(this.fontRenderer, "Generate new level", this.width / 2, 40, 16777215);
-+		drawCenteredString(this.fontRenderer, this.mc.adventureMode ? "Creating " + this.mc.worldDir.getName() + "..." : "Generate new level", this.width / 2, 40, 16777215);
++		drawCenteredString(this.fontRenderer, this.mc.adventureMode ? "Creating " + this.mc.worldSaveLocation.getName() + "..." : "Generate new level", this.width / 2, 40, 16777215);
  		super.drawScreen(var1, var2, var3);
++
++		int width = SIZE_VALUES[(int)this.sizeSlider.getValue()];
++		int length = SIZE_VALUES[(int)this.sizeSlider.getValue()];
++		int height = HEIGHT_VALUES[(int)this.heightSlider.getValue()];
++		long volume = (long)width * (long)length * (long)height;
++		long memoryRequirement = volume * 6;
++		if (volume >= (long)Integer.MAX_VALUE || memoryRequirement > Runtime.getRuntime().maxMemory()) {
++			drawCenteredString(this.fontRenderer, "TOO MUCH VOLUME! NOT ENOUGH MEMORY!", this.width / 2, this.height / 4 + 120, 0xFF5555);
++		};
  	}
  }
 --- /dev/null
